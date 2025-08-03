@@ -405,7 +405,7 @@ def init_socket_server():
             (r"/judge", JudgeWebSocketClient),
         ]
     )
-    app.listen(2503)
+    app.listen(2502)
     return app
 
 
