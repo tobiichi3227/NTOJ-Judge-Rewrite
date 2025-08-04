@@ -31,18 +31,18 @@ class CompileTask(Task):
             sources = [f"a{lang.source_ext}"]
             copy_in = {f"a{lang.source_ext}": {"src": chal.code_path}}
             if chal.has_grader:
-                grader_path = os.path.join(chal.res_path, "grader", lang.name)
-                if not os.path.exists(grader_path):
+                grader_folder_path = os.path.join(chal.res_path, "grader", lang.name)
+                if not os.path.exists(grader_folder_path):
                     chal.result.total_result.status = Status.JudgeError
-                    chal.result.total_result.ie_message = f"{lang.name} version grader not support, please contact administrator or problem setter"
+                    chal.result.total_result.ie_message = f"{lang.name} version grader not support, please contact administrator or problem setter."
                     chal.result.total_result.message_type = MessageType.TEXT
                     return
 
-                for name in os.listdir(grader_path):
+                for name in os.listdir(grader_folder_path):
                     if os.path.isdir(name):
                         continue
 
-                    copy_in[name] = {"src": os.path.join(grader_path, name)}
+                    copy_in[name] = {"src": os.path.join(grader_folder_path, name)}
 
                 if chal.userprog_compiler in [
                     Compiler.clang_c_11,
@@ -54,6 +54,17 @@ class CompileTask(Task):
                         f"{chal.res_path}/grader/{lang.name}/*{lang.source_ext}"
                     ):
                         sources.append(os.path.basename(sourcefile))
+
+                if chal.userprog_compiler == Compiler.python3:
+                    grader_path = os.path.join(grader_folder_path, "grader.py")
+                    if not os.path.exists(grader_path):
+                        chal.result.total_result.status = Status.JudgeError
+                        chal.result.total_result.ie_message = "Python3 version grader need grader.py, but file not found.\n please contact administrator or problem setter."
+                        chal.result.total_result.message_type = MessageType.TEXT
+                        return
+
+                    sources.append("grader.py")
+                    sources.reverse()
 
             res = lang.compile(
                 copy_in, sources, chal.userprog_compile_args, f"a{lang.executable_ext}"
