@@ -12,6 +12,7 @@ from models import (
 
 from lang.base import langs
 
+import config
 import executor_server
 
 
@@ -69,6 +70,7 @@ class ExecuteTask(Task):
                         "cpuLimit": chal.limits.time,
                         "memoryLimit": chal.limits.memory,
                         "procLimit": lang.allow_thread_count,
+                        "cpuRateLimit": config.CPU_RATE,
                         "copyIn": {"a": {"fileId": chal.userprog_id}},
                         "copyOutCached": ["stdout"],
                         "copyOutMax": chal.limits.output,

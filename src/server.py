@@ -435,9 +435,13 @@ def sig_handler(sig, _):
 def main():
     utils.logger.info("Judge Start")
     executor_server.init()
-    err = executor_server.init_container(
-        {"cinitPath": "./cinit", "cgroupPrefix": "ntoj-judge-rewrite"}
-    )
+    init_params = {"cinitPath": "./cinit", "cgroupPrefix": "ntoj-judge-rewrite"}
+    if config.CPUSET:
+        init_params["cpuset"] = config.CPUSET
+
+    if config.CPU_RATE:
+        init_params["enableCpuRate"] = True
+    err = executor_server.init_container(init_params)
     if err:
         utils.logger.error("Failed to init container")
         return
