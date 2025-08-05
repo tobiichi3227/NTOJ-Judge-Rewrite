@@ -45,9 +45,6 @@ class _Rust(CompiledLang):
         )
         return res
 
-    def execute(self):
-        pass
-
 
 reg_lang(
     Compiler.rust,
