@@ -277,7 +277,7 @@ def push_challenge(chal: Challenge):
     compile_task = TaskEntry(
         internal_id=chal.internal_id,
         task=CompileTask(CompileTaskType.USER),
-        priority=1,
+        priority=chal.priority,
     )
 
     summary_task = TaskEntry(
