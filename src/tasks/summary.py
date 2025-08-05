@@ -65,6 +65,8 @@ class SummaryTask(Task):
                             )
                     else:
                         subtask_result.score = chal.subtasks[subtask_id].score
+                else:
+                    subtask_result.score = decimal.Decimal("Infinity")
 
             if subtask_result.score.is_infinite():
                 subtask_result.score = decimal.Decimal()
