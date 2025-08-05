@@ -158,6 +158,10 @@ class ScoringTask(Task):
                     return
 
                 checker_message = res["files"]["stderr"].split("\n")[0]
+                if checker_message:
+                    testdata_result.message = checker_message
+                    testdata_result.message_type = MessageType.TEXT
+
                 try:
                     score = float(res["files"]["stdout"].split("\n")[0])
                 except ValueError:
@@ -175,8 +179,6 @@ class ScoringTask(Task):
                         self.testdata.id
                     ].status = Status.PartialCorrect
                 testdata_result.score = decimal.Decimal(score)
-                testdata_result.message = checker_message
-                testdata_result.message_type = MessageType.TEXT
 
             elif chal.checker_type == CheckerType.STD_TESTLIB:
                 if res["status"] not in [
@@ -204,8 +206,10 @@ class ScoringTask(Task):
                         testdata_result.status = Status.JudgeError
                         testdata_result.score = decimal.Decimal()
 
-                testdata_result.message = res["files"]["stdout"]
-                testdata_result.message_type = MessageType.TEXT
+                checker_message = res["files"]["stdout"]
+                if checker_message:
+                    testdata_result.message = checker_message
+                    testdata_result.message_type = MessageType.TEXT
 
     def finish(self, chal: Challenge, task: TaskEntry):
         chal.reporter(
