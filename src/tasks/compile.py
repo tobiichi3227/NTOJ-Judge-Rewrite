@@ -39,7 +39,7 @@ class CompileTask(Task):
                     return
 
                 for name in os.listdir(grader_folder_path):
-                    if os.path.isdir(name):
+                    if os.path.isdir(os.path.join(grader_folder_path, name)):
                         continue
 
                     copy_in[name] = {"src": os.path.join(grader_folder_path, name)}
