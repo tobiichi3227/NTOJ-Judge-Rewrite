@@ -83,10 +83,11 @@ class ExecuteTask(Task):
         testdata_result = chal.result.testdata_results[self.testdata.id]
         testdata_result.memory = res["memory"]
         testdata_result.time = max(res["runTime"], res["time"])
+        if res["fileIds"]["stdout"]:
+            self.testdata.useroutput_id = res["fileIds"]["stdout"]
 
         if res["status"] == GoJudgeStatus.Accepted:
             testdata_result.status = Status.Accepted
-            self.testdata.useroutput_id = res["fileIds"]["stdout"]
 
         elif res["status"] == GoJudgeStatus.TimeLimitExceeded:
             testdata_result.status = Status.TimeLimitExceeded
@@ -117,3 +118,5 @@ class ExecuteTask(Task):
 
         if chal.result.testdata_results[self.testdata.id].status != Status.Accepted:
             chal.skip_subtasks.update(self.testdata.subtasks)
+            if self.testdata.useroutput_id:
+                executor_server.file_delete(self.testdata.useroutput_id)
