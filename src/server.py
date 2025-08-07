@@ -88,6 +88,16 @@ def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
             )
             chal.result.total_result.message_type = MessageType.TEXT
 
+        if chal.userprog_id:
+            executor_server.file_delete(chal.userprog_id)
+        if chal.checker_id:
+            executor_server.file_delete(chal.checker_id)
+        if chal.summary_id:
+            executor_server.file_delete(chal.summary_id)
+        for t in chal.testdatas.values():
+            if t.useroutput_id:
+                executor_server.file_delete(t.useroutput_id)
+
         task_running_cnt -= 1
         chal.reporter(
             {"chal_id": chal.chal_id, "task": "summary", "result": chal.result}
