@@ -91,9 +91,13 @@ class SummaryTask(Task):
                 ]
                 testdata_result.status = Status.Skipped
 
-        # NOTE: This only occur CE/CLE/JE (when checker / summary got CE/CLE)
-        for subtask_result in result.subtask_results.values():
+        # NOTE: This only occur CE/CLE/JE (when checker / summary got CE/CLE) or subtask without having any testdata
+        for subtask_id, subtask_result in result.subtask_results.items():
             if subtask_result.status is None:
+                if len(chal.subtasks[subtask_id].testdatas) == 0:
+                    subtask_result.status = Status.JudgeError
+                    continue
+
                 assert result.total_result.status in [
                     Status.CompileError,
                     Status.CompileLimitExceeded,
