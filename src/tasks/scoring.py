@@ -42,12 +42,8 @@ class ScoringTask(Task):
         if chal.result.total_result.status in [
             Status.CompileError,
             Status.CompileLimitExceeded,
+            Status.JudgeError,
         ]:
-            return False
-        elif chal.result.total_result.status == Status.JudgeError:
-            # TODO: custom summary maybe fail
-            assert chal.checker_type in CheckerType.need_build_checkers()
-            self.set_testdata_result_je(chal)
             return False
 
         # NOTE: TOJ Format Checker allow all status
@@ -206,6 +202,7 @@ class ScoringTask(Task):
                         testdata_result.status = Status.JudgeError
                         testdata_result.score = decimal.Decimal()
 
+                # TODO: testlib message
                 checker_message = res["files"]["stdout"]
                 if checker_message:
                     testdata_result.message = checker_message
