@@ -69,6 +69,7 @@ class ExecuteTask(Task):
                         ],
                         "cpuLimit": chal.limits.time,
                         "memoryLimit": chal.limits.memory,
+                        "stackLimit": 65536 * 1024,
                         "procLimit": lang.allow_thread_count,
                         "cpuRateLimit": config.CPU_RATE,
                         "copyIn": {"a": {"fileId": chal.userprog_id}},
