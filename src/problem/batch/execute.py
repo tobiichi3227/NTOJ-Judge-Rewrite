@@ -14,9 +14,10 @@ from lang.base import langs
 
 import config
 import executor_server
+from problem.mixins import UserProgramMixin
 
 
-class ExecuteTask(Task):
+class BatchExecuteTask(Task):
     def __init__(self, testdata: TestData):
         self.testdata = testdata
 
@@ -48,11 +49,12 @@ class ExecuteTask(Task):
         return True
 
     def run(self, chal: Challenge, task: TaskEntry):
-        lang = langs[chal.userprog_compiler]
-        if chal.userprog_compiler != Compiler.java:
+        assert isinstance(chal.problem_context, UserProgramMixin)
+        lang = langs[chal.problem_context.userprog_compiler]
+        if chal.problem_context.userprog_compiler != Compiler.java:
             args = lang.get_execute_command("a")
         else:
-            if chal.has_grader:
+            if chal.problem_context.has_grader:
                 args = lang.get_execute_command("a", "grader")
             else:
                 args = lang.get_execute_command("a", "main")
@@ -72,7 +74,7 @@ class ExecuteTask(Task):
                         "stackLimit": 65536 * 1024,
                         "procLimit": lang.allow_thread_count,
                         "cpuRateLimit": config.CPU_RATE,
-                        "copyIn": {"a": {"fileId": chal.userprog_id}},
+                        "copyIn": {"a": {"fileId": chal.problem_context.userprog_id}},
                         "copyOutCached": ["stdout"],
                         "copyOutMax": chal.limits.output,
                     }

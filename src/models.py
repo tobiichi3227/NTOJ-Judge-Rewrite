@@ -39,7 +39,6 @@ SignalErrorMessage = {
     11: "segmentation fault",
 }
 
-
 class Compiler(IntEnum):
     gcc_c_11 = 1
     clang_c_11 = 2
@@ -181,31 +180,16 @@ class Challenge:
 
     code_path: str
     res_path: str
-    limits: Limits
-    has_grader: bool
+    limits: Limits = None
+    result: Result = None
 
-    userprog_compiler: Compiler
-    userprog_compile_args: list[str]
-
-    checker_type: CheckerType
-    checker_compiler: Compiler | None
-    checker_compile_args: list[str]
-
-    summary_type: SummaryType
-    summary_compiler: Compiler | None
-    summary_compile_args: list[str]
-
-    result: Result
+    problem_context: 'ProblemContext' = None
 
     reporter: FunctionType = lambda: 0
     skip_nonac: bool = False
     skip_subtasks: set[int] = field(default_factory=set)
 
     internal_id: int = field(default_factory=next_internal_id)
-
-    checker_id: str | None = None
-    userprog_id: str | None = None
-    summary_id: str | None = None
 
     testdatas: dict[int, TestData] = field(default_factory=dict)
     subtasks: dict[int, Subtask] = field(default_factory=dict)
@@ -278,3 +262,34 @@ class CompilationTarget(ABC):
     @abstractmethod
     def on_compile_failure(self, chal: 'Challenge', res: dict):
         pass
+
+@dataclass(slots=True)
+class ProblemContext(ABC):
+    problem_type: str
+
+    @classmethod
+    @abstractmethod
+    def from_json(cls, obj: dict, chal: 'Challenge') -> 'ProblemContext':
+        pass
+
+    @abstractmethod
+    def build_task_dag(self, chal: 'Challenge') -> list[TaskEntry]:
+        pass
+
+    @abstractmethod
+    def create_testdata(self, chal: 'Challenge', testdata_obj: dict) -> TestData:
+        pass
+
+
+_CONTEXT_REGISTRY: dict[str, type[ProblemContext]] = {}
+
+def register_context(problem_type: str):
+    def decorator(cls: type[ProblemContext]):
+        _CONTEXT_REGISTRY[problem_type] = cls
+        return cls
+    return decorator
+
+def get_context_class(problem_type: str) -> type[ProblemContext]:
+    if problem_type not in _CONTEXT_REGISTRY:
+        raise ValueError(f"Unknown problem type: {problem_type}")
+    return _CONTEXT_REGISTRY[problem_type]

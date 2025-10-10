@@ -16,6 +16,7 @@ from models import (
 
 
 from lang.base import langs
+from problem.mixins import CheckerMixin, UserProgramMixin
 
 DEFAULT_CHECKER = {
     CheckerType.DIFF: "lcmp",
@@ -38,6 +39,7 @@ class ScoringTask(Task):
         testdata_result.time = 0
 
     def setup(self, chal: Challenge, task: TaskEntry) -> bool:
+        assert isinstance(chal.problem_context, CheckerMixin)
         # NOTE: Check CE / CLE / JE
         if chal.result.total_result.status in [
             Status.CompileError,
@@ -47,18 +49,19 @@ class ScoringTask(Task):
             return False
 
         # NOTE: TOJ Format Checker allow all status
-        if chal.checker_type != CheckerType.TOJ:
+        if chal.problem_context.checker_type != CheckerType.TOJ:
             return (
                 chal.result.testdata_results[self.testdata.id].status == Status.Accepted
             )
         return True
 
     def run(self, chal: Challenge, task: TaskEntry):
-        assert chal.checker_type not in [CheckerType.TOJ, CheckerType.IOREDIR], (
+        assert isinstance(chal.problem_context, CheckerMixin)
+        assert chal.problem_context.checker_type not in [CheckerType.TOJ, CheckerType.IOREDIR], (
             "TODO: CheckerType TOJ and IOREDIR"
         )
         testdata_result = chal.result.testdata_results[self.testdata.id]
-        if chal.checker_type in [
+        if chal.problem_context.checker_type in [
             CheckerType.DIFF,
             CheckerType.DIFF_STRICT,
             CheckerType.DIFF_FLOAT4,
@@ -88,7 +91,7 @@ class ScoringTask(Task):
                                 "checker": {
                                     "src": os.path.join(
                                         DEFAULT_CHECKER_PATH,
-                                        DEFAULT_CHECKER[chal.checker_type],
+                                        DEFAULT_CHECKER[chal.problem_context.checker_type],
                                     )
                                 },
                                 "in": {"src": self.testdata.inputpath},
@@ -107,13 +110,14 @@ class ScoringTask(Task):
                     self.testdata.id
                 ].status = Status.WrongAnswer
 
-        elif chal.checker_type in [
+        elif chal.problem_context.checker_type in [
             CheckerType.CMS_TPS_TESTLIB,
             CheckerType.STD_TESTLIB,
         ]:
-            assert chal.checker_compiler
-            lang = langs[chal.checker_compiler]
-            if chal.userprog_compiler != Compiler.java:
+            assert isinstance(chal.problem_context, UserProgramMixin)
+            assert chal.problem_context.checker_compiler
+            lang = langs[chal.problem_context.checker_compiler]
+            if chal.problem_context.userprog_compiler != Compiler.java:
                 args = lang.get_execute_command("checker", args=["in", "out", "ans"])
             else:
                 args = lang.get_execute_command(
@@ -136,7 +140,7 @@ class ScoringTask(Task):
                             "procLimit": lang.allow_thread_count,
                             "strictMemoryLimit": False,
                             "copyIn": {
-                                "checker": {"fileId": chal.checker_id},
+                                "checker": {"fileId": chal.problem_context.checker_id},
                                 "in": {"src": self.testdata.inputpath},
                                 "out": {"src": self.testdata.outputpath},
                                 "ans": {"fileId": self.testdata.useroutput_id},
@@ -148,7 +152,8 @@ class ScoringTask(Task):
             )
             res = res["results"][0]
 
-            if chal.checker_type == CheckerType.CMS_TPS_TESTLIB:
+            # TODO: Move this to utils
+            if chal.problem_context.checker_type == CheckerType.CMS_TPS_TESTLIB:
                 if res["status"] != GoJudgeStatus.Accepted:
                     self.set_testdata_result_je(chal)
                     return
@@ -176,7 +181,7 @@ class ScoringTask(Task):
                     ].status = Status.PartialCorrect
                 testdata_result.score = decimal.Decimal(score)
 
-            elif chal.checker_type == CheckerType.STD_TESTLIB:
+            elif chal.problem_context.checker_type == CheckerType.STD_TESTLIB:
                 if res["status"] not in [
                     GoJudgeStatus.Accepted,
                     GoJudgeStatus.NonzeroExitStatus,

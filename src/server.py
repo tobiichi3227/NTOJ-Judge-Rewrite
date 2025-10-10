@@ -12,7 +12,14 @@ import threading
 from multiprocessing.dummy import Pool as ThreadingPool
 from queue import PriorityQueue, Queue
 
-from problem.batch import BatchCheckerTarget, BatchUserProgramTarget
+from utils.challenge_builder import parse_base_challenge_info, parse_testdatas_and_subtasks
+
+import importlib
+import pkgutil
+import problem
+for _, modname, ispkg in pkgutil.iter_modules(problem.__path__, problem.__name__ + "."):
+    importlib.import_module(modname)
+
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
@@ -21,10 +28,6 @@ import config
 import executor_server
 import utils
 from models import *
-from tasks.compile import CompileTask
-from tasks.execute import ExecuteTask
-from tasks.scoring import ScoringTask
-from tasks.summary import SummaryTask
 from lang.base import init_langs
 
 server_running = True
@@ -89,12 +92,12 @@ def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
             )
             chal.result.total_result.message_type = MessageType.TEXT
 
-        if chal.userprog_id:
-            executor_server.file_delete(chal.userprog_id)
-        if chal.checker_id:
-            executor_server.file_delete(chal.checker_id)
-        if chal.summary_id:
-            executor_server.file_delete(chal.summary_id)
+        if chal.problem_context.userprog_id:
+            executor_server.file_delete(chal.problem_context.userprog_id)
+        if chal.problem_context.checker_id:
+            executor_server.file_delete(chal.problem_context.checker_id)
+        if chal.problem_context.summary_id:
+            executor_server.file_delete(chal.problem_context.summary_id)
         for t in chal.testdatas.values():
             if t.useroutput_id:
                 executor_server.file_delete(t.useroutput_id)
@@ -167,183 +170,29 @@ obj = {
 
 
 def build_challenge(obj: dict):
-    limits = Limits(
-        obj["limit"]["time"], obj["limit"]["memory"], obj["limit"]["output"]
-    )
-    testdatas: dict[int, TestData] = {}
-    res_path = obj["res_path"]
+    problem_type = obj.get("problem_type", "batch")
+    base_info = parse_base_challenge_info(obj)
+    chal = Challenge(**base_info)
+    context_class = get_context_class(problem_type)
+    context = context_class.from_json(obj, chal)
+    chal.problem_context = context
+    chal.testdatas, chal.subtasks = parse_testdatas_and_subtasks(obj, chal, context)
 
-    result = Result(chal_id=obj["chal_id"])
-    for t in obj["testdatas"]:
-        testdata = TestData(
-            int(t["id"]),
-            os.path.join(res_path, "testdata", t["input"]),
-            os.path.join(res_path, "testdata", t["output"]),
-        )
-        testdatas[t["id"]] = testdata
-        result.testdata_results[t["id"]] = TestDataResult(t["id"])
+    chal.result = Result(chal_id=chal.chal_id)
+    for testdata_id in chal.testdatas:
+        chal.result.testdata_results[testdata_id] = TestDataResult(id=testdata_id)
+    for subtask_id in chal.subtasks:
+        chal.result.subtask_results[subtask_id] = SubtaskResult()
 
-    subtasks = {}
-    for g in obj["subtasks"]:
-        subtask = Subtask(
-            id=int(g["id"]),
-            score=decimal.Decimal(g["score"]),
-            dependency_subtasks=g["dependency_subtasks"],
-        )
-        for t in g["testdatas"]:
-            testdatas[t].subtasks.add(subtask.id)
-            subtask.testdatas.append(testdatas[t])
+    tasks = context.build_task_dag(chal)
 
-        result.subtask_results[subtask.id] = SubtaskResult()
-        subtasks[subtask.id] = subtask
+    return chal, tasks
 
-    checker_type = CheckerType(obj["checker_type"])
-    checker_compiler = None
-    if obj["checker_compiler"] and checker_type in [
-        CheckerType.CMS_TPS_TESTLIB,
-        CheckerType.STD_TESTLIB,
-        CheckerType.IOREDIR,
-        CheckerType.TOJ,
-    ]:
-        checker_compiler = Compiler(obj["checker_compiler"])
-
-    summary_type = SummaryType(obj["summary_type"])
-    summary_compiler = None
-    if obj["summary_compiler"] and summary_type == SummaryType.CUSTOM:
-        checker_compiler = Compiler(obj["summary_compiler"])
-
-    chal = Challenge(
-        acct_id=obj["acct_id"],
-        pro_id=obj["pro_id"],
-        contest_id=obj["contest_id"],
-        chal_id=obj["chal_id"],
-        priority=obj["priority"],
-        skip_nonac=obj["skip_nonac"],
-        limits=limits,
-        res_path=res_path,
-        code_path=obj["code_path"],
-        userprog_compiler=Compiler(obj["userprog_compiler"]),
-        userprog_compile_args=shlex.split(obj["userprog_compile_args"]),
-        checker_type=checker_type,
-        checker_compiler=checker_compiler,
-        checker_compile_args=shlex.split(obj["checker_compile_args"]),
-        summary_type=summary_type,
-        summary_compiler=summary_compiler,
-        summary_compile_args=shlex.split(obj["summary_compile_args"]),
-        testdatas=testdatas,
-        subtasks=subtasks,
-        has_grader=obj["has_grader"],
-        result=result,
-    )
-
-    return chal
-
-
-def get_exec_order(chal: Challenge, skip_nonac=False) -> list[int]:
-    def lower_bound(layers: list[set[int]], pred) -> int:
-        left, right = 0, len(layers)
-        while left < right:
-            mid = (left + right) // 2
-            if pred(layers[mid]):
-                left = mid + 1
-            else:
-                right = mid
-        return left
-
-    testdata_cnt = len(chal.testdatas)
-    order = list(range(testdata_cnt))
-
-    if skip_nonac:
-        testdata_layer = [0] * testdata_cnt
-        scan_order = sorted(
-            range(testdata_cnt),
-            key=lambda i: len(chal.testdatas[i].subtasks),
-            reverse=True,
-        )
-        subtask_layers: list[set[int]] = []
-        for testdata_idx in scan_order:
-            pos = lower_bound(
-                subtask_layers,
-                lambda layer: all(
-                    subtask in layer
-                    for subtask in chal.testdatas[testdata_idx].subtasks
-                ),
-            )
-
-            if pos == len(subtask_layers):
-                subtask_layers.append(set())
-
-            subtask_layers[pos].update(chal.testdatas[testdata_idx].subtasks)
-            testdata_layer[testdata_idx] = pos
-
-        inverse_order = sorted(range(testdata_cnt), key=lambda i: testdata_layer[i])
-        for i, idx in enumerate(inverse_order):
-            order[idx] = i
-
-    return order
-
-
-def push_challenge(chal: Challenge):
-    challenge_list[chal.internal_id] = chal
-    compile_task = TaskEntry(
-        internal_id=chal.internal_id,
-        task=CompileTask(BatchUserProgramTarget()),
-        priority=chal.priority,
-    )
-
-    summary_task = TaskEntry(
-        internal_id=chal.internal_id,
-        task=SummaryTask(),
-        priority=chal.priority,
-    )
-
-    exec_tasks = []
-    scoring_tasks = []
-    exec_order = get_exec_order(chal, chal.skip_nonac)
-    for idx, testdata in enumerate(chal.testdatas.values()):
-        exec_task = TaskEntry(
-            internal_id=chal.internal_id,
-            task=ExecuteTask(testdata),
-            priority=chal.priority,
-            order=exec_order[idx],
-        )
-        scoring_task = TaskEntry(
-            internal_id=chal.internal_id,
-            task=ScoringTask(testdata),
-            priority=chal.priority,
-            order=exec_order[idx],
-        )
-        link_task(exec_task, scoring_task)
-        link_task(scoring_task, summary_task)
-        exec_tasks.append(exec_task)
-        scoring_tasks.append(scoring_task)
-
-    for exec_task in exec_tasks:
-        link_task(compile_task, exec_task)
-
-    if chal.checker_type in [
-        CheckerType.CMS_TPS_TESTLIB,
-        CheckerType.STD_TESTLIB,
-        CheckerType.TOJ,
-    ]:
-        checker_compile_task = TaskEntry(
-            internal_id=chal.internal_id,
-            task=CompileTask(BatchCheckerTarget()),
-            priority=chal.priority,
-        )
-        for scoring_task in scoring_tasks:
-            link_task(checker_compile_task, scoring_task)
-        add_task(checker_compile_task)
-
-    add_task(compile_task)
-    for t in exec_tasks:
-        add_task(t)
-    for t in scoring_tasks:
-        add_task(t)
-    add_task(summary_task)
+def push_tasks(tasks: list[TaskEntry]):
+    for task in tasks:
+        add_task(task)
 
     task_event.set()
-
 
 class Encoder(json.JSONEncoder):
     def default(self, o):
@@ -378,7 +227,7 @@ class JudgeWebSocketClient(tornado.websocket.WebSocketHandler):
         self.ping()
         obj = json.loads(msg)
         try:
-            chal = build_challenge(obj)
+            chal, tasks = build_challenge(obj)
         except Exception as e:
             import traceback
 
@@ -389,6 +238,7 @@ class JudgeWebSocketClient(tornado.websocket.WebSocketHandler):
             result.total_result.memory = 0
             result.total_result.time = 0
             result.total_result.score = decimal.Decimal()
+            print(traceback.format_exception(e))
             if __debug__:
                 result.total_result.ie_message = "\n".join(
                     traceback.format_exception(e)
@@ -399,7 +249,8 @@ class JudgeWebSocketClient(tornado.websocket.WebSocketHandler):
             return
 
         chal.reporter = self.reporter
-        push_challenge(chal)
+        challenge_list[chal.internal_id] = chal
+        push_tasks(tasks)
 
     def on_close(self):
         utils.logger.info(

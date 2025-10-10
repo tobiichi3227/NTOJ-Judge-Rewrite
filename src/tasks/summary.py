@@ -9,20 +9,24 @@ from models import (
     TaskEntry,
     Challenge,
 )
+from problem.mixins import UserProgramMixin, CheckerMixin, SummaryMixin
 
 
 class SummaryTask(Task):
     def setup(self, chal: Challenge, task: TaskEntry) -> bool:
         # NOTE: CE / CLE / JE need summary set testdata results and subtask results status to Status.Skipped
+        assert isinstance(chal.problem_context, SummaryMixin)
         if (
-            chal.summary_type == SummaryType.CUSTOM
+            chal.problem_context.summary_type == SummaryType.CUSTOM
             and chal.result.total_result.status == Status.JudgeError
         ):
             return False
         return True
 
     def run(self, chal: Challenge, task: TaskEntry):
-        assert chal.summary_type != SummaryType.CUSTOM, "TODO: Custom summary"
+        assert isinstance(chal.problem_context, SummaryMixin)
+        assert isinstance(chal.problem_context, CheckerMixin)
+        assert chal.problem_context.summary_type != SummaryType.CUSTOM, "TODO: Custom summary"
         result = chal.result
 
         for subtask_id, subtask_result in result.subtask_results.items():
@@ -48,18 +52,18 @@ class SummaryTask(Task):
                     Status.Accepted,
                     Status.PartialCorrect,
                 ]:
-                    if chal.checker_type in [
+                    if chal.problem_context.checker_type in [
                         CheckerType.CMS_TPS_TESTLIB,
                         CheckerType.STD_TESTLIB,
                         CheckerType.TOJ,
                     ]:
-                        if chal.summary_type == SummaryType.GROUPMIN:
+                        if chal.problem_context.summary_type == SummaryType.GROUPMIN:
                             subtask_result.score = min(
                                 subtask_result.score,
                                 chal.subtasks[subtask_id].score * testdata_result.score,
                             )
 
-                        elif chal.summary_type == SummaryType.OVERWRITE:
+                        elif chal.problem_context.summary_type == SummaryType.OVERWRITE:
                             subtask_result.score = min(
                                 subtask_result.score, testdata_result.score
                             )
@@ -95,6 +99,7 @@ class SummaryTask(Task):
         for subtask_id, subtask_result in result.subtask_results.items():
             if subtask_result.status is None:
                 if len(chal.subtasks[subtask_id].testdatas) == 0:
+                    print(102)
                     subtask_result.status = Status.JudgeError
                     continue
 
@@ -125,11 +130,15 @@ class SummaryTask(Task):
 
         # NOTE: If total_result.status still None, it means there are no testdata and subtask
         if result.total_result.status is None:
+            print(133)
             result.total_result.status = Status.JudgeError
             result.total_result.ie_message = "Problem do not have any testdata or subtask. Please contact administrator or problem setter."
             result.total_result.message_type = MessageType.TEXT
 
     def finish(self, chal: Challenge, task: TaskEntry):
+        assert isinstance(chal.problem_context, SummaryMixin)
+        assert isinstance(chal.problem_context, CheckerMixin)
+        assert isinstance(chal.problem_context, UserProgramMixin)
         chal.reporter(
             {
                 "chal_id": chal.chal_id,
@@ -138,9 +147,9 @@ class SummaryTask(Task):
             }
         )
 
-        if chal.checker_id:
-            executor_server.file_delete(chal.checker_id)
-        if chal.userprog_id:
-            executor_server.file_delete(chal.userprog_id)
-        if chal.summary_id:
-            executor_server.file_delete(chal.summary_id)
+        if chal.problem_context.checker_id:
+            executor_server.file_delete(chal.problem_context.checker_id)
+        if chal.problem_context.userprog_id:
+            executor_server.file_delete(chal.problem_context.userprog_id)
+        if chal.problem_context.summary_id:
+            executor_server.file_delete(chal.problem_context.summary_id)
