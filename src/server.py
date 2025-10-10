@@ -12,6 +12,7 @@ import threading
 from multiprocessing.dummy import Pool as ThreadingPool
 from queue import PriorityQueue, Queue
 
+from problem.batch import BatchCheckerTarget, BatchUserProgramTarget
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
@@ -286,7 +287,7 @@ def push_challenge(chal: Challenge):
     challenge_list[chal.internal_id] = chal
     compile_task = TaskEntry(
         internal_id=chal.internal_id,
-        task=CompileTask(CompileTaskType.USER),
+        task=CompileTask(BatchUserProgramTarget()),
         priority=chal.priority,
     )
 
@@ -327,7 +328,7 @@ def push_challenge(chal: Challenge):
     ]:
         checker_compile_task = TaskEntry(
             internal_id=chal.internal_id,
-            task=CompileTask(CompileTaskType.CHECKER),
+            task=CompileTask(BatchCheckerTarget()),
             priority=chal.priority,
         )
         for scoring_task in scoring_tasks:

@@ -211,6 +211,7 @@ class Challenge:
     subtasks: dict[int, Subtask] = field(default_factory=dict)
 
 
+@dataclass(slots=True)
 class Task(ABC):
     @abstractmethod
     def setup(self, chal: Challenge, task: "TaskEntry") -> bool:
@@ -243,3 +244,37 @@ class TaskEntry:
             return self.internal_id < other.internal_id
 
         return self.order < other.order
+
+@dataclass(slots=True)
+class CompilationTarget(ABC):
+    @abstractmethod
+    def can_compile(self, chal: 'Challenge') -> bool:
+        pass
+
+    @abstractmethod
+    def get_source_files(self, chal: 'Challenge') -> dict[str, dict]:
+        pass
+
+    @abstractmethod
+    def get_source_list(self, chal: 'Challenge') -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_compiler(self, chal: 'Challenge') -> 'Compiler':
+        pass
+
+    @abstractmethod
+    def get_compile_args(self, chal: 'Challenge') -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_output_name(self, chal: 'Challenge') -> str:
+        pass
+
+    @abstractmethod
+    def on_compile_success(self, chal: 'Challenge', file_id: str):
+        pass
+
+    @abstractmethod
+    def on_compile_failure(self, chal: 'Challenge', res: dict):
+        pass
