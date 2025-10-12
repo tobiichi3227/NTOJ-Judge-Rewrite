@@ -2,9 +2,10 @@ from dataclasses import dataclass
 import os
 import glob
 
-from models import CompilationTarget, Challenge, GoJudgeStatus, Status, MessageType, Compiler, register_context
+from models import CompilationTarget, Challenge, SandboxStatus, Status, MessageType, Compiler
 from problem.mixins import UserProgramMixin, CheckerMixin
 from lang.base import langs
+from sandbox.sandbox import SandboxResult
 
 @dataclass(slots=True)
 class UserProgramCompilationTarget(CompilationTarget):
@@ -29,9 +30,9 @@ class UserProgramCompilationTarget(CompilationTarget):
                     return False
         return True
 
-    def get_source_files(self, chal: 'Challenge') -> dict[str, dict]:
+    def get_source_files(self, chal: 'Challenge') -> list[tuple[str, str]]:
         lang = langs[self.context.userprog_compiler]
-        copy_in = {f"a{lang.source_ext}": {"src": chal.code_path}}
+        copy_in = [(chal.code_path, f"a{lang.source_ext}")]
 
         if self.context.has_grader:
             grader_folder_path = os.path.join(chal.res_path, "grader", lang.name)
@@ -39,7 +40,7 @@ class UserProgramCompilationTarget(CompilationTarget):
                 if os.path.isdir(os.path.join(grader_folder_path, name)):
                     continue
 
-                copy_in[name] = {"src": os.path.join(grader_folder_path, name)}
+                copy_in.append((os.path.join(grader_folder_path, name), name))
         return copy_in
 
     def get_source_list(self, chal: 'Challenge') -> list[str]:
@@ -72,21 +73,28 @@ class UserProgramCompilationTarget(CompilationTarget):
     def get_output_name(self, chal: 'Challenge') -> str:
         return f"a{langs[self.context.userprog_compiler].executable_ext}"
 
-    def on_compile_success(self, chal: 'Challenge', file_id: str):
-        self.context.userprog_id = file_id
+    def on_compile_success(self, chal: 'Challenge', file: str):
+        self.context.userprog_path = chal.box.get_file(file)
 
-    def on_compile_failure(self, chal: 'Challenge', res: dict):
-        chal.result.total_result.ce_message = res['files']['stderr']
+    def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
+        stderr = chal.box.get_file("stderr")
+        if stderr:
+            with open(stderr) as f:
+                chal.result.total_result.ce_message = f.read()
+            chal.box.delete_file("stderr")
+
         chal.result.total_result.message_type = MessageType.TEXT
-        if res['status'] == GoJudgeStatus.NonzeroExitStatus:
+        if res.status in [SandboxStatus.NonzeroExitStatus, SandboxStatus.Signalled]:
             chal.result.total_result.status = Status.CompileError
 
-        elif res['status'] in [
-            GoJudgeStatus.TimeLimitExceeded,
-            GoJudgeStatus.MemoryLimitExceeded,
-            GoJudgeStatus.FileError,
+        elif res.status in [
+            SandboxStatus.TimeLimitExceeded,
+            SandboxStatus.MemoryLimitExceeded,
+            SandboxStatus.OutputLimitExceeded,
         ]:
             chal.result.total_result.status = Status.CompileLimitExceeded
+        elif res.status == SandboxStatus.RunnerError:
+            chal.result.total_result.status = Status.InternalError
 
 @dataclass(slots=True)
 class CheckerCompilationTarget(CompilationTarget):
@@ -103,18 +111,18 @@ class CheckerCompilationTarget(CompilationTarget):
             return False
         return True
 
-    def get_source_files(self, chal: 'Challenge') -> dict[str, dict]:
+    def get_source_files(self, chal: 'Challenge') -> list[tuple[str, str]]:
         assert self.context.checker_compiler
         lang = langs[self.context.checker_compiler]
         checker_name = f"checker{lang.source_ext}"
         checker_path = os.path.join(chal.res_path, "checker")
-        copy_in = {checker_name: {"src": os.path.join(checker_path, checker_name)}}
+        copy_in = [(os.path.join(checker_path, checker_name), checker_name)]
 
         for name in os.listdir(checker_path):
             if os.path.isdir(name):
                 continue
 
-            copy_in[name] = {"src": os.path.join(checker_path, name)}
+            copy_in.append((os.path.join(checker_path, name), name))
         return copy_in
 
     def get_source_list(self, chal: 'Challenge') -> list[str]:
@@ -132,10 +140,14 @@ class CheckerCompilationTarget(CompilationTarget):
         assert self.context.checker_compiler
         return f"checker{langs[self.context.checker_compiler].executable_ext}"
 
-    def on_compile_success(self, chal: 'Challenge', file_id: str):
-        self.context.checker_id = file_id
+    def on_compile_success(self, chal: 'Challenge', file: str):
+        self.context.checker_path = chal.box.get_file(file)
 
-    def on_compile_failure(self, chal: 'Challenge', res: dict):
+    def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
         chal.result.total_result.status = Status.JudgeError
-        chal.result.total_result.ie_message = res['files']['stderr']
         chal.result.total_result.message_type = MessageType.TEXT
+        stderr = chal.box.get_file("stderr")
+        if stderr:
+            with open(stderr) as f:
+                chal.result.total_result.ce_message = f.read()
+            chal.box.delete_file("stderr")

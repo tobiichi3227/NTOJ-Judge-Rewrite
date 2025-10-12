@@ -1,5 +1,4 @@
 import decimal
-import executor_server
 from models import (
     CheckerType,
     MessageType,
@@ -92,6 +91,7 @@ class SummaryTask(Task):
                     Status.CompileError,
                     Status.CompileLimitExceeded,
                     Status.JudgeError,
+                    Status.InternalError,
                 ]
                 testdata_result.status = Status.Skipped
 
@@ -99,7 +99,6 @@ class SummaryTask(Task):
         for subtask_id, subtask_result in result.subtask_results.items():
             if subtask_result.status is None:
                 if len(chal.subtasks[subtask_id].testdatas) == 0:
-                    print(102)
                     subtask_result.status = Status.JudgeError
                     continue
 
@@ -107,6 +106,7 @@ class SummaryTask(Task):
                     Status.CompileError,
                     Status.CompileLimitExceeded,
                     Status.JudgeError,
+                    Status.InternalError,
                 ]
                 subtask_result.status = Status.Skipped
 
@@ -130,7 +130,6 @@ class SummaryTask(Task):
 
         # NOTE: If total_result.status still None, it means there are no testdata and subtask
         if result.total_result.status is None:
-            print(133)
             result.total_result.status = Status.JudgeError
             result.total_result.ie_message = "Problem do not have any testdata or subtask. Please contact administrator or problem setter."
             result.total_result.message_type = MessageType.TEXT
@@ -147,9 +146,4 @@ class SummaryTask(Task):
             }
         )
 
-        if chal.problem_context.checker_id:
-            executor_server.file_delete(chal.problem_context.checker_id)
-        if chal.problem_context.userprog_id:
-            executor_server.file_delete(chal.problem_context.userprog_id)
-        if chal.problem_context.summary_id:
-            executor_server.file_delete(chal.problem_context.summary_id)
+        chal.box.cleanup()

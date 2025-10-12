@@ -5,7 +5,7 @@ from models import Challenge, ProblemContext, CheckerType, register_context, Tas
 from problem.mixins import CheckerMixin, SummaryMixin, UserProgramMixin
 from problem.compilation import CheckerCompilationTarget, UserProgramCompilationTarget
 from problem.batch.execute import BatchExecuteTask
-from utils.challenge_builder import parse_checker_info, parse_limits, parse_summary_info, parse_user_program_info, get_exec_order
+from utils.challenge_builder import parse_checker_info, parse_limits, parse_summary_info, parse_user_program_info, get_exec_order, link_task
 from tasks.compile import CompileTask
 from tasks.scoring import ScoringTask
 from tasks.summary import SummaryTask
@@ -35,20 +35,17 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
         tasks = []
         def add_task(task: TaskEntry):
             tasks.append(task)
-        def link_task(a: TaskEntry, b: TaskEntry):
-            a.edges.append(b.task_id)
-            b.indeg_cnt += 1
 
         compile_task = TaskEntry(
-            internal_id=chal.internal_id,
-            task=CompileTask(UserProgramCompilationTarget(self)),
-            priority=chal.priority,
+            CompileTask(UserProgramCompilationTarget(self)),
+            chal.internal_id,
+            chal.priority,
         )
 
         summary_task = TaskEntry(
-            internal_id=chal.internal_id,
-            task=SummaryTask(),
-            priority=chal.priority,
+            SummaryTask(),
+            chal.internal_id,
+            chal.priority,
         )
 
         exec_tasks = []
@@ -56,15 +53,15 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
         exec_order = get_exec_order(chal, chal.skip_nonac)
         for idx, testdata in enumerate(chal.testdatas.values()):
             exec_task = TaskEntry(
-                internal_id=chal.internal_id,
-                task=BatchExecuteTask(testdata),
-                priority=chal.priority,
+                BatchExecuteTask(testdata),
+                chal.internal_id,
+                chal.priority,
                 order=exec_order[idx],
             )
             scoring_task = TaskEntry(
-                internal_id=chal.internal_id,
-                task=ScoringTask(testdata),
-                priority=chal.priority,
+                ScoringTask(testdata),
+                chal.internal_id,
+                chal.priority,
                 order=exec_order[idx],
             )
             link_task(exec_task, scoring_task)
@@ -82,9 +79,9 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
             CheckerType.TOJ,
         ]:
             checker_compile_task = TaskEntry(
-                internal_id=chal.internal_id,
-                task=CompileTask(CheckerCompilationTarget(self)),
-                priority=chal.priority,
+                CompileTask(CheckerCompilationTarget(self)),
+                chal.internal_id,
+                chal.priority,
             )
             for scoring_task in scoring_tasks:
                 link_task(checker_compile_task, scoring_task)

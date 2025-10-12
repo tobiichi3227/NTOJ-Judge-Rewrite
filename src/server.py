@@ -8,6 +8,7 @@ import multiprocessing.pool
 import os
 import signal
 import shlex
+import atexit
 import threading
 from multiprocessing.dummy import Pool as ThreadingPool
 from queue import PriorityQueue, Queue
@@ -25,7 +26,6 @@ import tornado.web
 import tornado.websocket
 
 import config
-import executor_server
 import utils
 from models import *
 from lang.base import init_langs
@@ -40,12 +40,6 @@ task_event = threading.Event()
 task_running_cnt = 0
 threading_pool: multiprocessing.pool.Pool = ThreadingPool()
 
-
-def link_task(a: TaskEntry, b: TaskEntry):
-    a.edges.append(b.task_id)
-    b.indeg_cnt += 1
-
-
 def remove_task(task: TaskEntry):
     for next in task.edges:
         next_task = task_list[next]
@@ -54,12 +48,6 @@ def remove_task(task: TaskEntry):
         if next_task.indeg_cnt == 0:
             task_queue.put(next_task)
     task_list.pop(task.task_id)
-
-
-def add_task(task: TaskEntry):
-    task_list[task.task_id] = task
-    if task.indeg_cnt == 0:
-        task_queue.put(task)
 
 
 def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
@@ -92,15 +80,7 @@ def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
             )
             chal.result.total_result.message_type = MessageType.TEXT
 
-        if chal.problem_context.userprog_id:
-            executor_server.file_delete(chal.problem_context.userprog_id)
-        if chal.problem_context.checker_id:
-            executor_server.file_delete(chal.problem_context.checker_id)
-        if chal.problem_context.summary_id:
-            executor_server.file_delete(chal.problem_context.summary_id)
-        for t in chal.testdatas.values():
-            if t.useroutput_id:
-                executor_server.file_delete(t.useroutput_id)
+        chal.box.cleanup()
 
         task_running_cnt -= 1
         chal.reporter(
@@ -190,7 +170,9 @@ def build_challenge(obj: dict):
 
 def push_tasks(tasks: list[TaskEntry]):
     for task in tasks:
-        add_task(task)
+        task_list[task.task_id] = task
+        if task.indeg_cnt == 0:
+            task_queue.put(task)
 
     task_event.set()
 
@@ -221,6 +203,7 @@ class JudgeWebSocketClient(tornado.websocket.WebSocketHandler):
         pass
 
     def reporter(self, result):
+        print(result)
         ioloop.add_callback(lambda: self.write_message(json.dumps(result, cls=Encoder)))
 
     async def on_message(self, msg):
@@ -293,21 +276,18 @@ def sig_handler(sig, _):
     print(f"Caught signal: {sig}")
     ioloop.add_callback_from_signal(shutdown)
 
+def init_sandbox():
+    os.mkdir("/dev/shm/ntoj-judge-sandbox")
+
+def clean_sandbox():
+    import shutil
+    shutil.rmtree("/dev/shm/ntoj-judge-sandbox", ignore_errors=True)
 
 def main():
     utils.logger.info("Judge Start")
-    executor_server.init()
-    init_params = {"cinitPath": "./cinit", "cgroupPrefix": "ntoj-judge-rewrite"}
-    if config.CPUSET:
-        init_params["cpuset"] = config.CPUSET
 
-    if config.CPU_RATE:
-        init_params["enableCpuRate"] = True
-    err = executor_server.init_container(init_params)
-    if err:
-        utils.logger.error("Failed to init container")
-        return
-
+    init_sandbox()
+    atexit.register(clean_sandbox)
     init_langs()
     app = init_socket_server()
 

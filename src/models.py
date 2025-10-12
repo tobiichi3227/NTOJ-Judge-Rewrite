@@ -3,18 +3,17 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from dataclasses import dataclass, field
 from types import FunctionType
+from sandbox.sandbox import ChallengeBox, SandboxResult
 
-
-class GoJudgeStatus:
-    Accepted = "Accepted"
-    MemoryLimitExceeded = "Memory Limit Exceeded"
-    TimeLimitExceeded = "Time Limit Exceeded"
-    OutputLimitExceeded = "Output Limit Exceeded"
-    FileError = "File Error"
-    NonzeroExitStatus = "Nonzero Exit Status"
-    Signalled = "Signalled"
-    InternalError = "Internal Error"
-
+class SandboxStatus(IntEnum):
+    Normal = 1
+    TimeLimitExceeded = 2
+    MemoryLimitExceeded = 3
+    OutputLimitExceeded = 4
+    DisallowedSyscall = 5
+    Signalled = 6
+    NonzeroExitStatus = 7
+    RunnerError = 8
 
 class Status(IntEnum):
     Accepted = 1
@@ -107,6 +106,8 @@ def next_task_id() -> int:
     task_id += 1
     return task_id
 
+def next_challenge_box() -> ChallengeBox:
+    return ChallengeBox("/dev/shm/ntoj-judge-sandbox", internal_id)
 
 @dataclass(frozen=True, slots=True)
 class Limits:
@@ -120,7 +121,7 @@ class TestData:
     id: int
     inputpath: str
     outputpath: str
-    useroutput_id: str | None = None
+    useroutput_path: str | None = None
     subtasks: set[int] = field(default_factory=set)
 
 
@@ -190,6 +191,7 @@ class Challenge:
     skip_subtasks: set[int] = field(default_factory=set)
 
     internal_id: int = field(default_factory=next_internal_id)
+    box: ChallengeBox = field(default_factory=next_challenge_box)
 
     testdatas: dict[int, TestData] = field(default_factory=dict)
     subtasks: dict[int, Subtask] = field(default_factory=dict)
@@ -208,7 +210,6 @@ class Task(ABC):
     @abstractmethod
     def finish(self, chal: Challenge, task: "TaskEntry"):
         pass
-
 
 @dataclass(slots=True)
 class TaskEntry:
@@ -236,7 +237,7 @@ class CompilationTarget(ABC):
         pass
 
     @abstractmethod
-    def get_source_files(self, chal: 'Challenge') -> dict[str, dict]:
+    def get_source_files(self, chal: 'Challenge') -> list[tuple[str, str]]:
         pass
 
     @abstractmethod
@@ -256,11 +257,11 @@ class CompilationTarget(ABC):
         pass
 
     @abstractmethod
-    def on_compile_success(self, chal: 'Challenge', file_id: str):
+    def on_compile_success(self, chal: 'Challenge', file: str):
         pass
 
     @abstractmethod
-    def on_compile_failure(self, chal: 'Challenge', res: dict):
+    def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
         pass
 
 @dataclass(slots=True)

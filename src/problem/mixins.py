@@ -6,7 +6,7 @@ from models import Compiler, CheckerType, SummaryType
 class UserProgramMixin:
     userprog_compiler: 'Compiler' = None
     userprog_compile_args: list[str] = field(default_factory=list)
-    userprog_id: str | None = None
+    userprog_path: str | None = None
     has_grader: bool = False
 
     def get_user_program_compile_target(self):
@@ -18,7 +18,7 @@ class CheckerMixin:
     checker_type: 'CheckerType' = None
     checker_compiler: 'Compiler | None' = None
     checker_compile_args: list[str] = field(default_factory=list)
-    checker_id: str | None = None
+    checker_path: str | None = None
 
     def has_custom_checker(self) -> bool:
         from models import CheckerType

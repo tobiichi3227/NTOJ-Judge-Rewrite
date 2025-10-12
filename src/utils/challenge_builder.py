@@ -1,6 +1,6 @@
 import decimal
 
-from models import Limits, CheckerType, SummaryType, TestData, Subtask, Compiler, ProblemContext, Challenge
+from models import Limits, CheckerType, SummaryType, TestData, Subtask, Compiler, ProblemContext, Challenge, TaskEntry
 
 def parse_base_challenge_info(obj: dict) -> dict:
     return {
@@ -24,9 +24,10 @@ def parse_limits(obj: dict) -> Limits:
 
 
 def parse_checker_info(obj: dict) -> dict:
+    checker_compiler_val = obj.get('checker_compiler')
     return {
         'checker_type': CheckerType(obj['checker_type']),
-        'checker_compiler': Compiler(obj['checker_compiler']) if obj.get('checker_compiler') else None,
+        'checker_compiler': Compiler(checker_compiler_val) if checker_compiler_val else None,
         'checker_compile_args': obj.get('checker_compile_args', []),
     }
 
@@ -107,3 +108,14 @@ def get_exec_order(chal: Challenge, skip_nonac=False) -> list[int]:
             order[idx] = i
 
     return order
+
+def link_task(a: TaskEntry, b: TaskEntry):
+    """
+    Link two TaskEntry objects by adding an edge from 'a' to 'b'.
+
+    Args:
+        a (TaskEntry): The source task entry.
+        b (TaskEntry): The destination task entry.
+    """
+    a.edges.append(b.task_id)
+    b.indeg_cnt += 1

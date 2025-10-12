@@ -1,49 +1,42 @@
-import executor_server
 from dataclasses import dataclass
 
 from lang.base import CompiledLang, reg_lang
 from models import Compiler
+from src.sandbox.sandbox import SandboxParams
 
 
 @dataclass
 class _Rust(CompiledLang):
     def compile(
         self,
-        copyin: dict[str, dict],
+        box,
+        copyin: list[tuple[str, str]],
         sources: list[str],
         addition_args: list[str],
         executable_name: str,
     ):
-        res = executor_server.exec(
-            {
-                "cmd": [
-                    {
-                        "args": [
-                            "/usr/bin/rustc",
-                            "-O",
-                            "-o",
-                            executable_name,
-                            sources[0],
-                            *addition_args,
-                        ],
-                        "env": ["PATH=/usr/bin:/bin"],
-                        "files": [
-                            {"content": ""},
-                            {"content": ""},
-                            {"name": "stderr", "max": 102400},
-                        ],
-                        "cpuLimit": 10000000000,  # 10 sec
-                        "memoryLimit": 536870912,  # 512M (256 << 20)
-                        "procLimit": 10,
-                        "copyIn": copyin,
-                        "copyOut": ["stderr"],
-                        "copyOutCached": [executable_name],
-                        "copyOutMax": 64000000,
-                    }
-                ]
-            }
+        param = SandboxParams(
+            exe_path="/usr/bin/rustc",
+            args=[
+                "-O",
+                "-o",
+                executable_name,
+                sources[0],
+                *addition_args,
+            ],
+            stderr=box.gen_filepath("stderr"),
+            copy_out_cache_files=[executable_name],
+            time_limit=10000,  # 10 sec
+            memory_limit=1024 << 20,  # 1024 MB
+            proc_limit=10,
+            output_limit=64 << 20,  # 64 MB
+            allow_proc=True,
+            allow_mount_proc=False
         )
-        return res
+        for src, dst in copyin:
+            param.add_copy_in_path(src, dst, True)
+        res = box.run_sandbox([param])
+        return res[0]
 
 
 reg_lang(
