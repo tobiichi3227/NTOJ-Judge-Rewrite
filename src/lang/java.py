@@ -1,9 +1,9 @@
 import os
-import executor_server
 from dataclasses import dataclass
 
 from lang.base import BaseLang, reg_lang
 from models import Compiler
+from sandbox.sandbox import SandboxParams
 
 TOOLS_PATH = os.path.join(os.getcwd(), "tools")
 
@@ -12,52 +12,40 @@ TOOLS_PATH = os.path.join(os.getcwd(), "tools")
 class _Java(BaseLang):
     def compile(
         self,
-        copyin: dict[str, dict],
+        box,
+        copyin: list[tuple[str, str]],
         sources: list[str],
         addition_args: list[str],
         executable_name: str,
     ):
-        res = executor_server.exec(
-            {
-                "cmd": [
-                    {
-                        "args": [
-                            "/usr/bin/bash",
-                            "compile_java.sh",
-                            executable_name,
-                        ],
-                        "env": ["PATH=/usr/bin:/bin"],
-                        "files": [
-                            {"content": ""},
-                            {"content": ""},
-                            {"name": "stderr", "max": 102400},
-                        ],
-                        "cpuLimit": 10000000000,  # 10 sec
-                        "memoryLimit": 536870912,  # 512M (256 << 20)
-                        "procLimit": 10,
-                        "copyIn": {
-                            "compile_java.sh": {
-                                "src": os.path.join(TOOLS_PATH, "compile_java.sh")
-                            },
-                            **copyin,
-                        },
-                        "copyOut": ["stderr"],
-                        "copyOutCached": [executable_name],
-                        "copyOutMax": 64000000,
-                    }
-                ]
-            }
+        param = SandboxParams(
+            exe_path="/usr/bin/bash",
+            args=[
+                "compile_java.sh",
+                executable_name,
+            ],
+            stderr=box.gen_filepath("stderr"),
+            copy_out_cache_files=[executable_name],
+            time_limit=10000,  # 10 sec
+            memory_limit=512 << 20,  # 512 MB
+            proc_limit=10,
+            output_limit=64 << 20,  # 64 MB
+            allow_proc=True,
+            allow_mount_proc=True
         )
-        return res
+        for src, dst in copyin:
+            param.add_copy_in_path(src, dst)
+        param.add_copy_in_path(os.path.join(TOOLS_PATH, "compile_java.sh"), "compile_java.sh")
+        res = box.run_sandbox([param])
+        return res[0]
 
     def get_execute_command(
-        self, executable_name, main=None, args: list[str] = None
-    ) -> list[str]:
+        self, executable_name: str, main=None, args: list[str] = None
+    ) -> tuple[str, list[str]]:
         if args is None:
             args = []
-        command = ["/usr/bin/java", "-cp", executable_name, main]
-        command.extend(args)
-        return command
+        command = ["-cp", executable_name, main] + args
+        return "/usr/bin/java", command
 
 
 reg_lang(

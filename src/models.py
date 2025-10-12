@@ -3,18 +3,17 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from dataclasses import dataclass, field
 from types import FunctionType
+from sandbox.sandbox import ChallengeBox, SandboxResult
 
-
-class GoJudgeStatus:
-    Accepted = "Accepted"
-    MemoryLimitExceeded = "Memory Limit Exceeded"
-    TimeLimitExceeded = "Time Limit Exceeded"
-    OutputLimitExceeded = "Output Limit Exceeded"
-    FileError = "File Error"
-    NonzeroExitStatus = "Nonzero Exit Status"
-    Signalled = "Signalled"
-    InternalError = "Internal Error"
-
+class SandboxStatus(IntEnum):
+    Normal = 1
+    TimeLimitExceeded = 2
+    MemoryLimitExceeded = 3
+    OutputLimitExceeded = 4
+    DisallowedSyscall = 5
+    Signalled = 6
+    NonzeroExitStatus = 7
+    RunnerError = 8
 
 class Status(IntEnum):
     Accepted = 1
@@ -38,7 +37,6 @@ SignalErrorMessage = {
     8: "floating point exception",
     11: "segmentation fault",
 }
-
 
 class Compiler(IntEnum):
     gcc_c_11 = 1
@@ -108,6 +106,8 @@ def next_task_id() -> int:
     task_id += 1
     return task_id
 
+def next_challenge_box() -> ChallengeBox:
+    return ChallengeBox("/dev/shm/ntoj-judge-sandbox", internal_id)
 
 @dataclass(frozen=True, slots=True)
 class Limits:
@@ -121,7 +121,7 @@ class TestData:
     id: int
     inputpath: str
     outputpath: str
-    useroutput_id: str | None = None
+    useroutput_path: str | None = None
     subtasks: set[int] = field(default_factory=set)
 
 
@@ -181,36 +181,23 @@ class Challenge:
 
     code_path: str
     res_path: str
-    limits: Limits
-    has_grader: bool
+    limits: Limits = None
+    result: Result = None
 
-    userprog_compiler: Compiler
-    userprog_compile_args: list[str]
-
-    checker_type: CheckerType
-    checker_compiler: Compiler | None
-    checker_compile_args: list[str]
-
-    summary_type: SummaryType
-    summary_compiler: Compiler | None
-    summary_compile_args: list[str]
-
-    result: Result
+    problem_context: 'ProblemContext' = None
 
     reporter: FunctionType = lambda: 0
     skip_nonac: bool = False
     skip_subtasks: set[int] = field(default_factory=set)
 
     internal_id: int = field(default_factory=next_internal_id)
-
-    checker_id: str | None = None
-    userprog_id: str | None = None
-    summary_id: str | None = None
+    box: ChallengeBox = field(default_factory=next_challenge_box)
 
     testdatas: dict[int, TestData] = field(default_factory=dict)
     subtasks: dict[int, Subtask] = field(default_factory=dict)
 
 
+@dataclass(slots=True)
 class Task(ABC):
     @abstractmethod
     def setup(self, chal: Challenge, task: "TaskEntry") -> bool:
@@ -223,7 +210,6 @@ class Task(ABC):
     @abstractmethod
     def finish(self, chal: Challenge, task: "TaskEntry"):
         pass
-
 
 @dataclass(slots=True)
 class TaskEntry:
@@ -243,3 +229,68 @@ class TaskEntry:
             return self.internal_id < other.internal_id
 
         return self.order < other.order
+
+@dataclass(slots=True)
+class CompilationTarget(ABC):
+    @abstractmethod
+    def can_compile(self, chal: 'Challenge') -> bool:
+        pass
+
+    @abstractmethod
+    def get_source_files(self, chal: 'Challenge') -> list[tuple[str, str]]:
+        pass
+
+    @abstractmethod
+    def get_source_list(self, chal: 'Challenge') -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_compiler(self, chal: 'Challenge') -> 'Compiler':
+        pass
+
+    @abstractmethod
+    def get_compile_args(self, chal: 'Challenge') -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_output_name(self, chal: 'Challenge') -> str:
+        pass
+
+    @abstractmethod
+    def on_compile_success(self, chal: 'Challenge', file: str):
+        pass
+
+    @abstractmethod
+    def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
+        pass
+
+@dataclass(slots=True)
+class ProblemContext(ABC):
+    problem_type: str
+
+    @classmethod
+    @abstractmethod
+    def from_json(cls, obj: dict, chal: 'Challenge') -> 'ProblemContext':
+        pass
+
+    @abstractmethod
+    def build_task_dag(self, chal: 'Challenge') -> list[TaskEntry]:
+        pass
+
+    @abstractmethod
+    def create_testdata(self, chal: 'Challenge', testdata_obj: dict) -> TestData:
+        pass
+
+
+_CONTEXT_REGISTRY: dict[str, type[ProblemContext]] = {}
+
+def register_context(problem_type: str):
+    def decorator(cls: type[ProblemContext]):
+        _CONTEXT_REGISTRY[problem_type] = cls
+        return cls
+    return decorator
+
+def get_context_class(problem_type: str) -> type[ProblemContext]:
+    if problem_type not in _CONTEXT_REGISTRY:
+        raise ValueError(f"Unknown problem type: {problem_type}")
+    return _CONTEXT_REGISTRY[problem_type]
