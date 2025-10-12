@@ -34,7 +34,7 @@ class _Cpp17(CompiledLang):
             stderr=box.gen_filepath("stderr"),
             copy_out_cache_files=[executable_name],
             time_limit=10000,  # 10 sec
-            memory_limit=512 << 20,  # 256 MB
+            memory_limit=512 << 20,  # 512 MB
             proc_limit=10,
             output_limit=64 << 20,  # 64 MB
             allow_proc=True,

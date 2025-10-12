@@ -70,8 +70,8 @@ class BatchExecuteTask(Task):
             # TODO: cpu rate
             stdin=self.testdata.inputpath,
             stdout=chal.box.gen_filepath(f"{self.testdata.id}-stdout"),
-            allow_proc=lang is Compiler.java,
-            allow_mount_proc=lang is Compiler.java,
+            allow_proc=lang.allow_thread_count > 1,
+            allow_mount_proc=lang == Compiler.java,
         )
         assert chal.problem_context.userprog_path
         param.add_copy_in_path(chal.problem_context.userprog_path, "a")

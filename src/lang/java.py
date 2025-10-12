@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from lang.base import BaseLang, reg_lang
 from models import Compiler
-from src.sandbox.sandbox import SandboxParams
+from sandbox.sandbox import SandboxParams
 
 TOOLS_PATH = os.path.join(os.getcwd(), "tools")
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from lang.base import CompiledLang, reg_lang
 from models import Compiler
-from src.sandbox.sandbox import SandboxParams
+from sandbox.sandbox import SandboxParams
 
 
 @dataclass

@@ -52,7 +52,6 @@ class ScoringTask(Task):
 
         # NOTE: TOJ Format Checker allow all status
         if chal.problem_context.checker_type != CheckerType.TOJ:
-            print(1110, chal.result.testdata_results[self.testdata.id].status == Status.Accepted)
             return (
                 chal.result.testdata_results[self.testdata.id].status == Status.Accepted
             )
@@ -98,10 +97,7 @@ class ScoringTask(Task):
             if res.status == SandboxStatus.Normal:
                 testdata_result.status = Status.Accepted
             else:
-                chal.result.testdata_results[
-                    self.testdata.id
-                ].status = Status.WrongAnswer
-            return
+                chal.result.testdata_results[self.testdata.id].status = Status.WrongAnswer
 
         elif chal.problem_context.checker_type in [
             CheckerType.CMS_TPS_TESTLIB,
@@ -125,8 +121,8 @@ class ScoringTask(Task):
                 proc_limit=lang.allow_thread_count,
                 stdout=chal.box.gen_filepath(f"{self.testdata.id}-checker-stdout"),
                 stderr=chal.box.gen_filepath(f"{self.testdata.id}-checker-stderr"),
-                allow_proc=lang is Compiler.java,
-                allow_mount_proc=lang is Compiler.java,
+                allow_proc=lang.allow_thread_count > 1,
+                allow_mount_proc=lang == Compiler.java,
             )
             assert chal.problem_context.checker_path
             param.add_copy_in_path(chal.problem_context.checker_path, "checker")

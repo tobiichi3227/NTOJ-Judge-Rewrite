@@ -203,7 +203,6 @@ class JudgeWebSocketClient(tornado.websocket.WebSocketHandler):
         pass
 
     def reporter(self, result):
-        print(result)
         ioloop.add_callback(lambda: self.write_message(json.dumps(result, cls=Encoder)))
 
     async def on_message(self, msg):
@@ -221,7 +220,6 @@ class JudgeWebSocketClient(tornado.websocket.WebSocketHandler):
             result.total_result.memory = 0
             result.total_result.time = 0
             result.total_result.score = decimal.Decimal()
-            print(traceback.format_exception(e))
             if __debug__:
                 result.total_result.ie_message = "\n".join(
                     traceback.format_exception(e)

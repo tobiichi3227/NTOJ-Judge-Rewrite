@@ -11,6 +11,8 @@ def parse_base_challenge_info(obj: dict) -> dict:
         'priority': obj.get('priority', 0),
         'code_path': obj['code_path'],
         'res_path': obj['res_path'],
+        'skip_nonac': obj.get('skip_nonac', False),
+        'skip_subtasks': set(obj.get('skip_subtasks', [])),
     }
 
 

@@ -15,15 +15,10 @@ from tasks.summary import SummaryTask
 class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, SummaryMixin):
     problem_type: str = "batch"
 
-    skip_nonac: bool = False
-    skip_subtasks: set[int] = field(default_factory=set)
-
     @classmethod
     def from_json(cls, obj: dict, chal: 'Challenge') -> 'BatchProblemContext':
         context = cls(
             problem_type="batch",
-            skip_nonac=obj.get('skip_nonac', False),
-            skip_subtasks=set(obj.get('skip_subtasks', [])),
             **parse_user_program_info(obj),
             **parse_checker_info(obj),
             **parse_summary_info(obj),
