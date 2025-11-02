@@ -6,6 +6,8 @@ import select
 import json
 import uuid
 
+import utils
+
 
 # From CMS
 def wait_without_std(procs):
@@ -192,8 +194,9 @@ class SandboxParams:
             "--open-file-limit", str(self.open_file_limit),
             "--vss-memory-limit", str(self.vss_memory_limit),
             "--redir-output-to-null",
-            "--show-trace-details",
         ]
+        if __debug__:
+            flags.append("--show-trace-details")
         if self.stdin:
             flags += ["--stdin", self.stdin]
         if self.stdout:
@@ -295,7 +298,7 @@ class ChallengeBox:
                 result_dict = json.loads(stdout_data)
                 result = SandboxResult.from_dict(result_dict)
             except Exception:
-                print(f"Sandbox parse error: {stdout_data}")
+                utils.logger.error(f"Sandbox parse error: {stdout_data}")
                 result = SandboxResult(8, 0, "parse error", 0, 0, 0, 0)
             results.append(result)
             for fname in params.copy_out_cache_files:
