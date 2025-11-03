@@ -137,7 +137,7 @@ var (
 	stdinFile, stdoutFile, stderrFile, workPath, cpuSet                                                               string
 	timeLimit, realTimeLimit, memoryLimit, vssMemoryLimit, outputLimit, openFileLimit, stackLimit, procLimit, cpuRate uint64
 
-	allowMountProc, allowProc, redirOutputToNull, enableSeccomp, showDetails bool
+	allowMountProc, allowMountProcRW, allowProc, redirOutputToNull, enableSeccomp, showDetails bool
 	args                                                                     []string
 	// stdinFd, stdoutFd, stderrFd                                                                                       uint64
 )
@@ -164,7 +164,8 @@ func main() {
 	flag.StringVar(&cpuSet, "cpuset", "", "Set cpu set")
 	flag.StringVar(&workPath, "workpath", "", "Set the work path of the program")
 	flag.BoolVar(&allowProc, "allow-proc", false, "Allow fork, exec... etc.")
-	flag.BoolVar(&allowMountProc, "allow-mount-proc", false, "Allow mount /proc, this is for java")
+	flag.BoolVar(&allowMountProc, "allow-mount-proc", false, "Allow mount readonly /proc, this is for java")
+	flag.BoolVar(&allowMountProcRW, "allow-mount-proc-rw", false, "Allow mount /proc with read/write")
 	flag.BoolVar(&redirOutputToNull, "redir-output-to-null", false, "Redir empty stdout and stderr to /dev/null")
 	flag.BoolVar(&enableSeccomp, "seccomp", false, "Enable seccomp")
 	flag.BoolVar(&showDetails, "show-trace-details", false, "Show trace details")
@@ -258,6 +259,8 @@ func start() (*runner.Result, error) {
 
 	if allowMountProc {
 		mb.WithProc()
+	} else if allowMountProcRW {
+		mb.WithProcRW(true)
 	}
 
 	for _, path := range addBindPath {

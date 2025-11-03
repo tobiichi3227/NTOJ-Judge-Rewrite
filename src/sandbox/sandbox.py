@@ -98,6 +98,7 @@ class SandboxParams:
     extra_env: list[str] = field(default_factory=list)
     allow_proc: bool = False
     allow_mount_proc: bool = False
+    allow_mount_proc_rw: bool = False
     cpuset: str = ""
     bind_paths: list[tuple[str, str, bool]] = field(default_factory=list)  # (src, dst, readonly)
     bind_to_workdir_paths: list[tuple[str, str, bool]] = field(default_factory=list)  # (src, dst, readonly)
@@ -163,6 +164,10 @@ class SandboxParams:
         self.allow_mount_proc = allow
         return self
 
+    def set_allow_mount_proc_rw(self, allow: bool):
+        self.allow_mount_proc_rw = allow
+        return self
+
     def add_bind_path(self, src: str, dst: str, readonly: bool = True):
         self.bind_paths.append((src, dst, readonly))
         return self
@@ -207,6 +212,8 @@ class SandboxParams:
             flags += ["--allow-proc"]
         if self.allow_mount_proc:
             flags += ["--allow-mount-proc"]
+        elif self.allow_mount_proc_rw:
+            flags += ["--allow-mount-proc-rw"]
         if self.cpuset:
             flags += ["--cpuset", self.cpuset]
         for env in self.extra_env:

@@ -1,17 +1,15 @@
 FROM golang:1.25-alpine AS builder
 WORKDIR /src
 COPY src/sandbox .
-# RUN apk add --no-cache git && GOPRIVATE=github.com/tobiichi3227/go-sandbox go mod tidy && go build -ldflags="-s -w" -o sandbox .
 RUN apk add --no-cache git && GOPRIVATE=github.com/tobiichi3227/go-sandbox go mod tidy && go build -ldflags="-s -w" -o sandbox .
-# RUN go build -ldflags="-s -w" -o sandbox .
-# RUN go build -gcflags "-N -l" -o sandbox .
 
-FROM ubuntu:24.04 AS release
+FROM debian:13-slim AS release
 
 RUN apt update \
-    && apt install -y make gcc g++ clang llvm python3 python3-pip rustc openjdk-17-jdk --no-install-suggests --no-install-recommends \
+    && apt install -y make gcc g++ clang llvm python3 python3-pip rustc openjdk-21-jdk-headless --no-install-suggests --no-install-recommends \
     && apt clean \
-    && pip install cffi tornado --break-system-packages
+    && pip install cffi tornado --break-system-packages \
+    && rm -rf /var/lib/apt/lists/
 
 WORKDIR /judge
 COPY src .
@@ -22,4 +20,5 @@ WORKDIR /judge/default-checker
 RUN make
 
 WORKDIR /judge
+EXPOSE 2502
 CMD ["python3", "/judge/server.py"]
