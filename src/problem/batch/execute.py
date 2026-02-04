@@ -1,5 +1,6 @@
 import os
 import shutil
+import zipfile
 
 from models import (
     MessageType,
@@ -70,6 +71,9 @@ class BatchExecuteTask(Task):
         stdin_path = f"{self.testdata.id}-input"
         assert chal.box.get_file(stdin_path) is None
         shutil.copyfile(self.testdata.inputpath, stdin_path)
+        cpuset = ""
+        if config.CPUSET:
+            cpuset = config.CPUSET[next_execute_id() % len(config.CPUSET)]
         param = SandboxParams(
             exe_path=exec,
             args=args,
@@ -83,7 +87,7 @@ class BatchExecuteTask(Task):
             stdout=chal.box.gen_filepath(f"{self.testdata.id}-stdout"),
             allow_proc=lang.allow_thread_count > 1,
             allow_mount_proc=lang == Compiler.java,
-            cpuset=config.CPUSET[next_execute_id() % len(config.CPUSET)],
+            cpuset=cpuset,
         )
         assert chal.problem_context.userprog_path
         param.add_copy_in_path(chal.problem_context.userprog_path, "a")
@@ -98,6 +102,13 @@ class BatchExecuteTask(Task):
         testdata_result.time = max(res.run_time, res.time)
         if chal.box.get_file(f"{self.testdata.id}-stdout"):
             self.testdata.useroutput_path = chal.box.get_file(f"{self.testdata.id}-stdout")
+            if self.testdata.useroutput_path:
+                try:
+                    code_folder_path = os.path.dirname(chal.code_path)
+                    with zipfile.ZipFile(os.path.join(code_folder_path, "output.zip"), "a", compression=zipfile.ZIP_LZMA) as zf:
+                        zf.write(self.testdata.useroutput_path, f"{self.testdata.id + 1}.ans")
+                except Exception:
+                    pass
 
         if res.status == SandboxStatus.Normal:
             testdata_result.status = Status.Accepted

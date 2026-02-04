@@ -89,6 +89,14 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
             add_task(t)
         add_task(summary_task)
 
+        code_folder_path = os.path.dirname(chal.code_path)
+        output_zip_path = os.path.join(code_folder_path, "output.zip")
+        if os.path.exists(output_zip_path):
+            try:
+                os.remove(output_zip_path)
+            except Exception:
+                pass
+
         return tasks
 
     def create_testdata(self, chal: 'Challenge', testdata_obj: dict) -> TestData:
