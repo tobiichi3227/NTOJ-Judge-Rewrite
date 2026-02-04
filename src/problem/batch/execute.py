@@ -19,6 +19,11 @@ import config
 from problem.mixins import UserProgramMixin
 from sandbox.sandbox import SandboxParams
 
+execute_id = 0
+def next_execute_id() -> int:
+    global execute_id
+    execute_id += 1
+    return execute_id
 
 class BatchExecuteTask(Task):
     def __init__(self, testdata: TestData):
@@ -78,6 +83,7 @@ class BatchExecuteTask(Task):
             stdout=chal.box.gen_filepath(f"{self.testdata.id}-stdout"),
             allow_proc=lang.allow_thread_count > 1,
             allow_mount_proc=lang == Compiler.java,
+            cpuset=config.CPUSET[next_execute_id() % len(config.CPUSET)],
         )
         assert chal.problem_context.userprog_path
         param.add_copy_in_path(chal.problem_context.userprog_path, "a")
