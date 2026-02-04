@@ -1,3 +1,6 @@
+import os
+import shutil
+
 from models import (
     MessageType,
     SandboxStatus,
@@ -59,6 +62,9 @@ class BatchExecuteTask(Task):
             else:
                 exec, args = lang.get_execute_command("a", "main")
 
+        stdin_path = f"{self.testdata.id}-input"
+        assert chal.box.get_file(stdin_path) is None
+        shutil.copyfile(self.testdata.inputpath, stdin_path)
         param = SandboxParams(
             exe_path=exec,
             args=args,
@@ -68,7 +74,7 @@ class BatchExecuteTask(Task):
             output_limit=chal.limits.output // 1024,
             proc_limit=lang.allow_thread_count,
             # TODO: cpu rate
-            stdin=self.testdata.inputpath,
+            stdin=stdin_path,
             stdout=chal.box.gen_filepath(f"{self.testdata.id}-stdout"),
             allow_proc=lang.allow_thread_count > 1,
             allow_mount_proc=lang == Compiler.java,
@@ -76,6 +82,10 @@ class BatchExecuteTask(Task):
         assert chal.problem_context.userprog_path
         param.add_copy_in_path(chal.problem_context.userprog_path, "a")
         res = chal.box.run_sandbox([param])[0]
+        try:
+            os.remove(stdin_path)
+        except FileNotFoundError:
+            pass
 
         testdata_result = chal.result.testdata_results[self.testdata.id]
         testdata_result.memory = res.memory
