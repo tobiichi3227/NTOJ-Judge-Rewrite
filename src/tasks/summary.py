@@ -9,6 +9,7 @@ from models import (
     Challenge,
 )
 from problem.mixins import UserProgramMixin, CheckerMixin, SummaryMixin
+from utils import logger
 
 
 class SummaryTask(Task):
@@ -26,6 +27,7 @@ class SummaryTask(Task):
         assert isinstance(chal.problem_context, SummaryMixin)
         assert isinstance(chal.problem_context, CheckerMixin)
         assert chal.problem_context.summary_type != SummaryType.CUSTOM, "TODO: Custom summary"
+        logger.info(f"Starting summary task for chal {chal.chal_id} with summary type {chal.problem_context.summary_type}")
         result = chal.result
 
         for subtask_id, subtask_result in result.subtask_results.items():
@@ -130,6 +132,7 @@ class SummaryTask(Task):
 
         # NOTE: If total_result.status still None, it means there are no testdata and subtask
         if result.total_result.status is None:
+            logger.error(f"No testdata or subtask found for chal {chal.chal_id}")
             result.total_result.status = Status.JudgeError
             result.total_result.ie_message = "Problem do not have any testdata or subtask. Please contact administrator or problem setter."
             result.total_result.message_type = MessageType.TEXT
@@ -138,6 +141,7 @@ class SummaryTask(Task):
         assert isinstance(chal.problem_context, SummaryMixin)
         assert isinstance(chal.problem_context, CheckerMixin)
         assert isinstance(chal.problem_context, UserProgramMixin)
+        logger.info(f"Summary finished for chal {chal.chal_id}, final status: {chal.result.total_result.status}")
         chal.reporter(
             {
                 "chal_id": chal.chal_id,

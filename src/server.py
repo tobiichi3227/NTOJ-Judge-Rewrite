@@ -53,9 +53,13 @@ def remove_task(task: TaskEntry):
 def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
     global task_running_cnt
     try:
+        utils.logger.info(f"Start task {task.task_id} for challenge {chal.chal_id}")
         if task.task.setup(chal, task):
+            utils.logger.info(f"Running task {task.task_id} for challenge {chal.chal_id}")
             task.task.run(chal, task)
+            utils.logger.info(f"Finish task {task.task_id} for challenge {chal.chal_id}")
             task.task.finish(chal, task)
+            utils.logger.info(f"Task {task.task_id} for challenge {chal.chal_id} finished")
         finish_queue.put(task)
     except Exception as e:
         import traceback
@@ -256,22 +260,22 @@ def sig_handler(sig, _):
     def stop_loop(deadline):
         now = time.time()
         if now < deadline and ioloop.time:
-            print("Waiting for next tick")
+            utils.logger.info("Waiting for next tick")
             ioloop.add_timeout(now + 1, stop_loop, deadline)
         else:
             ioloop.add_callback(ioloop.stop)
 
-            print("Shutdown finally")
+            utils.logger.info("Shutdown finally")
 
     def shutdown():
         global server_running
         server_running = False
         threading_pool.close()
-        print("Stopping judge server")
-        print(f"Will shutdown in {0} seconds ...")
+        utils.logger.info("Stopping judge server")
+        utils.logger.info(f"Will shutdown in {0} seconds ...")
         stop_loop(time.time() + 0)
 
-    print(f"Caught signal: {sig}")
+    utils.logger.info(f"Caught signal: {sig}")
     ioloop.add_callback_from_signal(shutdown)
 
 def init_sandbox():

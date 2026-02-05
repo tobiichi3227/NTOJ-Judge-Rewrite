@@ -15,6 +15,7 @@ from models import (
 )
 
 from lang.base import langs
+from utils import logger
 
 import config
 from problem.mixins import UserProgramMixin
@@ -33,6 +34,7 @@ class BatchExecuteTask(Task):
     def setup(self, chal: Challenge, task: TaskEntry) -> bool:
         # NOTE: Check CE / CLE / JE
         if chal.result.total_result.status is not None:
+            logger.debug(f"Skipping testdata {self.testdata.id} due to total result status already set")
             return False
 
         if chal.skip_nonac:
@@ -43,6 +45,7 @@ class BatchExecuteTask(Task):
                     break
 
             if flag:
+                logger.debug(f"Skipping testdata {self.testdata.id} due to skip_nonac")
                 chal.result.testdata_results[self.testdata.id].status = Status.Skipped
                 chal.reporter(
                     {
@@ -60,6 +63,7 @@ class BatchExecuteTask(Task):
     def run(self, chal: Challenge, task: TaskEntry):
         assert isinstance(chal.problem_context, UserProgramMixin)
         lang = langs[chal.problem_context.userprog_compiler]
+        logger.info(f"Executing testdata {self.testdata.id} for chal {chal.chal_id} with {lang.name}")
         if chal.problem_context.userprog_compiler != Compiler.java:
             exec, args = lang.get_execute_command("a")
         else:
@@ -107,28 +111,36 @@ class BatchExecuteTask(Task):
                     code_folder_path = os.path.dirname(chal.code_path)
                     with zipfile.ZipFile(os.path.join(code_folder_path, "output.zip"), "a", compression=zipfile.ZIP_LZMA) as zf:
                         zf.write(self.testdata.useroutput_path, f"{self.testdata.id + 1}.ans")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Failed to write user output to zip for chal {chal.chal_id}, testdata {self.testdata.id}: {e}")
 
         if res.status == SandboxStatus.Normal:
             testdata_result.status = Status.Accepted
+            logger.info(f"Testdata {self.testdata.id} executed normally for chal {chal.chal_id}, time: {res.time}ms, memory: {res.memory}KB")
         elif res.status == SandboxStatus.TimeLimitExceeded:
             testdata_result.status = Status.TimeLimitExceeded
+            logger.info(f"Testdata {self.testdata.id} TLE for chal {chal.chal_id}")
         elif res.status == SandboxStatus.MemoryLimitExceeded:
             testdata_result.status = Status.MemoryLimitExceeded
+            logger.info(f"Testdata {self.testdata.id} MLE for chal {chal.chal_id}")
         elif res.status == SandboxStatus.OutputLimitExceeded:
             testdata_result.status = Status.OutputLimitExceeded
+            logger.info(f"Testdata {self.testdata.id} OLE for chal {chal.chal_id}")
         elif res.status == SandboxStatus.NonzeroExitStatus:
             testdata_result.status = Status.RuntimeError
+            logger.info(f"Testdata {self.testdata.id} runtime error for chal {chal.chal_id}, exit code: {res.exit_status}")
         elif res.status == SandboxStatus.Signalled:
             testdata_result.status = Status.RuntimeErrorSignalled
+            logger.info(f"Testdata {self.testdata.id} signalled for chal {chal.chal_id}, signal: {res.exit_status}")
             if res.exit_status in SignalErrorMessage:
                 testdata_result.message = SignalErrorMessage[res.exit_status]
                 testdata_result.message_type = MessageType.TEXT
         elif res.status == SandboxStatus.RunnerError:
             testdata_result.status = Status.InternalError
+            logger.error(f"Testdata {self.testdata.id} runner error for chal {chal.chal_id}")
 
     def finish(self, chal: Challenge, task: TaskEntry):
+        logger.debug(f"Execution finished for testdata {self.testdata.id} of chal {chal.chal_id}")
         chal.reporter(
             {
                 "chal_id": chal.chal_id,
@@ -138,6 +150,7 @@ class BatchExecuteTask(Task):
         )
 
         if chal.result.testdata_results[self.testdata.id].status != Status.Accepted:
+            logger.debug(f"Testdata {self.testdata.id} not accepted, marking subtasks as skip")
             chal.skip_subtasks.update(self.testdata.subtasks)
             if self.testdata.useroutput_path:
                 chal.box.delete_file(self.testdata.useroutput_path)

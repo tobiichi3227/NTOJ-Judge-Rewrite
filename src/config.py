@@ -1,7 +1,7 @@
 import logging
 
 JUDGE_TASK_MAXCONCURRENT = 4
-LOGGER_LEVEL = logging.DEBUG
+LOGGER_LEVEL = logging.INFO
 
 CPUSET = []
 CPU_RATE = 0
