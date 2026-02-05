@@ -6,6 +6,7 @@ from models import CompilationTarget, Challenge, SandboxStatus, Status, MessageT
 from problem.mixins import UserProgramMixin, CheckerMixin
 from lang.base import langs
 from sandbox.sandbox import SandboxResult
+from utils import logger
 
 @dataclass(slots=True)
 class UserProgramCompilationTarget(CompilationTarget):
@@ -16,6 +17,7 @@ class UserProgramCompilationTarget(CompilationTarget):
             lang = langs[self.context.userprog_compiler]
             grader_folder_path = os.path.join(chal.res_path, "grader", lang.name)
             if not os.path.exists(grader_folder_path):
+                logger.error(f"Grader folder not found for {lang.name} for chal {chal.chal_id}")
                 chal.result.total_result.status = Status.JudgeError
                 chal.result.total_result.ie_message = f"{lang.name} version grader not support, please contact administrator or problem setter."
                 chal.result.total_result.message_type = MessageType.TEXT
@@ -24,6 +26,7 @@ class UserProgramCompilationTarget(CompilationTarget):
             if self.context.userprog_compiler == Compiler.python3:
                 grader_path = os.path.join(grader_folder_path, "grader.py")
                 if not os.path.exists(grader_path):
+                    logger.error(f"grader.py not found for Python3 grader in chal {chal.chal_id}")
                     chal.result.total_result.status = Status.JudgeError
                     chal.result.total_result.ie_message = "Python3 version grader need grader.py, but file not found.\n please contact administrator or problem setter."
                     chal.result.total_result.message_type = MessageType.TEXT
@@ -74,9 +77,11 @@ class UserProgramCompilationTarget(CompilationTarget):
         return f"a{langs[self.context.userprog_compiler].executable_ext}"
 
     def on_compile_success(self, chal: 'Challenge', file: str):
+        logger.info(f"User program compilation succeeded for chal {chal.chal_id}")
         self.context.userprog_path = chal.box.get_file(file)
 
     def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
+        logger.info(f"User program compilation failed for chal {chal.chal_id}, status: {res.status}")
         stderr = chal.box.get_file("stderr")
         if stderr:
             with open(stderr) as f:
@@ -86,6 +91,7 @@ class UserProgramCompilationTarget(CompilationTarget):
         chal.result.total_result.message_type = MessageType.TEXT
         if res.status in [SandboxStatus.NonzeroExitStatus, SandboxStatus.Signalled]:
             chal.result.total_result.status = Status.CompileError
+            logger.info(f"Compile error for chal {chal.chal_id}")
 
         elif res.status in [
             SandboxStatus.TimeLimitExceeded,
@@ -93,8 +99,10 @@ class UserProgramCompilationTarget(CompilationTarget):
             SandboxStatus.OutputLimitExceeded,
         ]:
             chal.result.total_result.status = Status.CompileLimitExceeded
+            logger.info(f"Compile limit exceeded for chal {chal.chal_id}, limit type: {res.status}")
         elif res.status == SandboxStatus.RunnerError:
             chal.result.total_result.status = Status.InternalError
+            logger.error(f"Internal error during compilation for chal {chal.chal_id}")
 
 @dataclass(slots=True)
 class CheckerCompilationTarget(CompilationTarget):
@@ -105,6 +113,7 @@ class CheckerCompilationTarget(CompilationTarget):
         checker_name = f"checker{lang.source_ext}"
         checker_path = os.path.join(chal.res_path, "checker")
         if not os.path.exists(os.path.join(checker_path, checker_name)):
+            logger.error(f"Checker file {checker_name} not found in chal {chal.chal_id}")
             chal.result.total_result.status = Status.JudgeError
             chal.result.total_result.ie_message = f"{checker_name} not found, please contact administrator or problem setter"
             chal.result.total_result.message_type = MessageType.TEXT
@@ -141,9 +150,11 @@ class CheckerCompilationTarget(CompilationTarget):
         return f"checker{langs[self.context.checker_compiler].executable_ext}"
 
     def on_compile_success(self, chal: 'Challenge', file: str):
+        logger.info(f"Checker compilation succeeded for chal {chal.chal_id}")
         self.context.checker_path = chal.box.get_file(file)
 
     def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
+        logger.error(f"Checker compilation failed for chal {chal.chal_id}, status: {res.status}")
         chal.result.total_result.status = Status.JudgeError
         chal.result.total_result.message_type = MessageType.TEXT
         stderr = chal.box.get_file("stderr")

@@ -13,7 +13,7 @@ from models import (
     Compiler,
 )
 
-
+from utils import logger
 from lang.base import langs
 from problem.mixins import CheckerMixin, UserProgramMixin
 from sandbox.sandbox import SandboxParams
@@ -33,6 +33,7 @@ class ScoringTask(Task):
         self.testdata = testdata
 
     def set_testdata_result_je(self, chal: Challenge, reason: str):
+        logger.error(f"Judge error for chal {chal.chal_id} testdata {self.testdata.id}: {reason}")
         testdata_result = chal.result.testdata_results[self.testdata.id]
         testdata_result.status = Status.JudgeError
         testdata_result.memory = 0
@@ -62,6 +63,7 @@ class ScoringTask(Task):
         assert chal.problem_context.checker_type not in [CheckerType.TOJ, CheckerType.IOREDIR], (
             "TODO: CheckerType TOJ and IOREDIR"
         )
+        logger.debug(f"Scoring testdata {self.testdata.id} for chal {chal.chal_id} with checker type {chal.problem_context.checker_type}")
         testdata_result = chal.result.testdata_results[self.testdata.id]
         if chal.problem_context.checker_type in [
             CheckerType.DIFF,
@@ -96,7 +98,9 @@ class ScoringTask(Task):
             res = chal.box.run_sandbox([param])[0]
             if res.status == SandboxStatus.Normal:
                 testdata_result.status = Status.Accepted
+                logger.info(f"Testdata {self.testdata.id} accepted for chal {chal.chal_id}")
             else:
+                logger.info(f"Testdata {self.testdata.id} wrong answer for chal {chal.chal_id}, checker status: {res.status}")
                 chal.result.testdata_results[self.testdata.id].status = Status.WrongAnswer
 
         elif chal.problem_context.checker_type in [
@@ -156,23 +160,28 @@ class ScoringTask(Task):
                 if checker_message:
                     testdata_result.message = checker_message
                     testdata_result.message_type = MessageType.TEXT
+                    logger.debug(f"Checker message for testdata {self.testdata.id}: {checker_message}")
 
                 try:
                     score = float(stdout_content.split("\n")[0])
+                    logger.debug(f"Checker score for testdata {self.testdata.id}: {score}")
                 except ValueError:
                     self.set_testdata_result_je(chal, "invalid score")
                     return
 
                 if score >= 1.0:
                     testdata_result.status = Status.Accepted
+                    logger.info(f"Testdata {self.testdata.id} accepted with full score for chal {chal.chal_id}")
                 elif score <= 0.0:
                     chal.result.testdata_results[
                         self.testdata.id
                     ].status = Status.WrongAnswer
+                    logger.info(f"Testdata {self.testdata.id} wrong answer for chal {chal.chal_id}")
                 else:
                     chal.result.testdata_results[
                         self.testdata.id
                     ].status = Status.PartialCorrect
+                    logger.info(f"Testdata {self.testdata.id} partial correct ({score}) for chal {chal.chal_id}")
                 testdata_result.score = decimal.Decimal(score)
 
             elif chal.problem_context.checker_type == CheckerType.STD_TESTLIB:
@@ -185,8 +194,10 @@ class ScoringTask(Task):
 
                 if res.exit_status == 0:
                     testdata_result.status = Status.Accepted
+                    logger.info(f"Testdata {self.testdata.id} accepted for chal {chal.chal_id}")
                 elif res.exit_status in [1, 2]:
                     testdata_result.status = Status.WrongAnswer
+                    logger.info(f"Testdata {self.testdata.id} wrong answer for chal {chal.chal_id}")
                 elif res.exit_status == 3:
                     self.set_testdata_result_je(chal, "checker internal error")
                 elif res.exit_status == 7:
@@ -197,6 +208,7 @@ class ScoringTask(Task):
                         if line[0] != "points":
                             self.set_testdata_result_je(chal, "invalid score")
                         testdata_result.score = decimal.Decimal(line[1])
+                        logger.info(f"Testdata {self.testdata.id} partial correct ({line[1]}) for chal {chal.chal_id}")
                     except (IndexError, decimal.DecimalException):
                         testdata_result.status = Status.JudgeError
                         testdata_result.score = decimal.Decimal()

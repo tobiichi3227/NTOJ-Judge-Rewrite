@@ -1,11 +1,12 @@
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from models import Challenge, ProblemContext, CheckerType, register_context, TaskEntry, TestData
 from problem.mixins import CheckerMixin, SummaryMixin, UserProgramMixin
 from problem.compilation import CheckerCompilationTarget, UserProgramCompilationTarget
 from problem.batch.execute import BatchExecuteTask
 from utils.challenge_builder import parse_checker_info, parse_limits, parse_summary_info, parse_user_program_info, get_exec_order, link_task
+from utils import logger
 from tasks.compile import CompileTask
 from tasks.scoring import ScoringTask
 from tasks.summary import SummaryTask
@@ -17,6 +18,7 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
 
     @classmethod
     def from_json(cls, obj: dict, chal: 'Challenge') -> 'BatchProblemContext':
+        logger.info(f"Creating batch problem context for chal {chal.chal_id}")
         context = cls(
             problem_type="batch",
             **parse_user_program_info(obj),
@@ -24,9 +26,11 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
             **parse_summary_info(obj),
         )
         chal.limits = parse_limits(obj)
+        logger.debug(f"Batch context created: compiler={context.userprog_compiler}, checker_type={context.checker_type}")
         return context
 
     def build_task_dag(self, chal: 'Challenge') -> list[TaskEntry]:
+        logger.info(f"Building task DAG for chal {chal.chal_id}")
         tasks = []
         def add_task(task: TaskEntry):
             tasks.append(task)
@@ -89,6 +93,7 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
             add_task(t)
         add_task(summary_task)
 
+        logger.info(f"Task DAG built with {len(tasks)} tasks for chal {chal.chal_id} ({len(exec_tasks)} testcases)")
         return tasks
 
     def create_testdata(self, chal: 'Challenge', testdata_obj: dict) -> TestData:
