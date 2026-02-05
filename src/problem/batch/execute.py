@@ -108,11 +108,14 @@ class BatchExecuteTask(Task):
             self.testdata.useroutput_path = chal.box.get_file(f"{self.testdata.id}-stdout")
             if self.testdata.useroutput_path:
                 try:
+                    logger.info(f"Writing user output to zip for chal {chal.chal_id}, testdata {self.testdata.id}, filename: {self.testdata.id + 1}.ans")
                     code_folder_path = os.path.dirname(chal.code_path)
                     with zipfile.ZipFile(os.path.join(code_folder_path, "output.zip"), "a", compression=zipfile.ZIP_LZMA) as zf:
+                        logger.debug(f"{zf.namelist()} already in zip for chal {chal.chal_id}")
                         zf.write(self.testdata.useroutput_path, f"{self.testdata.id + 1}.ans")
+                    logger.info(f"Successfully wrote user output to zip for chal {chal.chal_id}, testdata {self.testdata.id}, filename: {self.testdata.id + 1}.ans")
                 except Exception as e:
-                    logger.error(f"Failed to write user output to zip for chal {chal.chal_id}, testdata {self.testdata.id}: {e}")
+                    logger.error(f"Failed to write user output to zip for chal {chal.chal_id}, testdata {self.testdata.id}, filename: {self.testdata.id + 1}.ans: {e}")
 
         if res.status == SandboxStatus.Normal:
             testdata_result.status = Status.Accepted

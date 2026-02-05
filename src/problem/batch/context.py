@@ -31,6 +31,14 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
 
     def build_task_dag(self, chal: 'Challenge') -> list[TaskEntry]:
         logger.info(f"Building task DAG for chal {chal.chal_id}")
+        code_folder_path = os.path.dirname(chal.code_path)
+        output_zip_path = os.path.join(code_folder_path, "output.zip")
+        if os.path.exists(output_zip_path):
+            try:
+                os.remove(output_zip_path)
+                logger.info(f"Removed existing output.zip for chal {chal.chal_id}")
+            except Exception as e:
+                logger.error(f"Failed to remove existing output.zip for chal {chal.chal_id}: {e}")
         tasks = []
         def add_task(task: TaskEntry):
             tasks.append(task)
@@ -92,14 +100,6 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
         for t in scoring_tasks:
             add_task(t)
         add_task(summary_task)
-
-        code_folder_path = os.path.dirname(chal.code_path)
-        output_zip_path = os.path.join(code_folder_path, "output.zip")
-        if os.path.exists(output_zip_path):
-            try:
-                os.remove(output_zip_path)
-            except Exception as e:
-                logger.error(f"Failed to remove existing output.zip for chal {chal.chal_id}: {e}")
 
         logger.info(f"Task DAG built with {len(tasks)} tasks for chal {chal.chal_id} ({len(exec_tasks)} testcases)")
         return tasks
