@@ -71,8 +71,9 @@ class BatchExecuteTask(Task):
             else:
                 exec, args = lang.get_execute_command("a", "main")
 
-        stdin_path = f"{self.testdata.id}-input"
-        assert chal.box.get_file(stdin_path) is None
+        stdin_name = f"{self.testdata.id}-input"
+        assert chal.box.get_file(stdin_name) is None
+        stdin_path = chal.box.gen_filepath(stdin_name)
         shutil.copyfile(self.testdata.inputpath, stdin_path)
         cpuset = ""
         if config.CPUSET:
