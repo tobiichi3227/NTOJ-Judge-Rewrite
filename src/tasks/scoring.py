@@ -1,3 +1,5 @@
+import random
+import string
 import decimal
 import os
 
@@ -27,6 +29,12 @@ DEFAULT_CHECKER = {
 }
 DEFAULT_CHECKER_PATH = os.path.join(os.getcwd(), "default-checker")
 
+def generate_random_string(length):
+    """
+    Generate a random string of a specified length using letters and digits.
+    """
+    characters = string.ascii_letters + string.digits
+    return 'f' + ''.join(random.choices(characters, k=length))
 
 class ScoringTask(Task):
     def __init__(self, testdata: TestData):
@@ -58,6 +66,8 @@ class ScoringTask(Task):
             )
         return True
 
+
+
     def run(self, chal: Challenge, task: TaskEntry):
         assert isinstance(chal.problem_context, CheckerMixin)
         assert chal.problem_context.checker_type not in [CheckerType.TOJ, CheckerType.IOREDIR], (
@@ -65,6 +75,9 @@ class ScoringTask(Task):
         )
         logger.debug(f"Scoring testdata {self.testdata.id} for chal {chal.chal_id} with checker type {chal.problem_context.checker_type}")
         testdata_result = chal.result.testdata_results[self.testdata.id]
+        in_name = generate_random_string(11)
+        out_name = generate_random_string(10)
+        ans_name = generate_random_string(10)
         if chal.problem_context.checker_type in [
             CheckerType.DIFF,
             CheckerType.DIFF_STRICT,
@@ -74,7 +87,7 @@ class ScoringTask(Task):
         ]:
             # TODO: random "in", "out", "ans" string for security
             exec, args = langs[Compiler.clang_cpp_17].get_execute_command(
-                "checker", args=["in", "out", "ans"]
+                "checker", args=[in_name, out_name, ans_name]
             )
             param = SandboxParams(
                 exe_path=exec,
@@ -91,10 +104,10 @@ class ScoringTask(Task):
                 ),
                 "checker",
             )
-            param.add_copy_in_path(self.testdata.inputpath, "in")
-            param.add_copy_in_path(self.testdata.outputpath, "out")
+            param.add_copy_in_path(self.testdata.inputpath, in_name)
+            param.add_copy_in_path(self.testdata.outputpath, out_name)
             assert self.testdata.useroutput_path
-            param.add_copy_in_path(self.testdata.useroutput_path, "ans")
+            param.add_copy_in_path(self.testdata.useroutput_path, ans_name)
             res = chal.box.run_sandbox([param])[0]
             if res.status == SandboxStatus.Normal:
                 testdata_result.status = Status.Accepted
@@ -111,10 +124,10 @@ class ScoringTask(Task):
             assert chal.problem_context.checker_compiler
             lang = langs[chal.problem_context.checker_compiler]
             if chal.problem_context.userprog_compiler != Compiler.java:
-                exec, args = lang.get_execute_command("checker", args=["in", "out", "ans"])
+                exec, args = lang.get_execute_command("checker", args=[in_name, out_name, ans_name])
             else:
                 exec, args = lang.get_execute_command(
-                    "checker", "checker", args=["in", "out", "ans"]
+                    "checker", "checker", args=[in_name, out_name, ans_name]
                 )
             param = SandboxParams(
                 exe_path=exec,
@@ -130,10 +143,10 @@ class ScoringTask(Task):
             )
             assert chal.problem_context.checker_path
             param.add_copy_in_path(chal.problem_context.checker_path, "checker")
-            param.add_copy_in_path(self.testdata.inputpath, "in")
-            param.add_copy_in_path(self.testdata.outputpath, "out")
+            param.add_copy_in_path(self.testdata.inputpath, in_name)
+            param.add_copy_in_path(self.testdata.outputpath, out_name)
             assert self.testdata.useroutput_path
-            param.add_copy_in_path(self.testdata.useroutput_path, "ans")
+            param.add_copy_in_path(self.testdata.useroutput_path, ans_name)
             res = chal.box.run_sandbox([param])[0]
 
             # TODO: Move this to utils
