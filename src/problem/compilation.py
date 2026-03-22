@@ -50,12 +50,12 @@ class UserProgramCompilationTarget(CompilationTarget):
         lang = langs[self.context.userprog_compiler]
         sources = [f"a{lang.source_ext}"]
         if self.context.has_grader:
-            if self.context.userprog_compiler in [
+            if self.context.userprog_compiler in (
                 Compiler.clang_c_11,
                 Compiler.clang_cpp_17,
                 Compiler.gcc_c_11,
                 Compiler.gcc_cpp_17,
-            ]:
+            ):
                 for sourcefile in glob.glob(
                     f"{chal.res_path}/grader/{lang.name}/*{lang.source_ext}"
                 ):
@@ -89,15 +89,15 @@ class UserProgramCompilationTarget(CompilationTarget):
             chal.box.delete_file("stderr")
 
         chal.result.total_result.message_type = MessageType.TEXT
-        if res.status in [SandboxStatus.NonzeroExitStatus, SandboxStatus.Signalled]:
+        if res.status in (SandboxStatus.NonzeroExitStatus, SandboxStatus.Signalled):
             chal.result.total_result.status = Status.CompileError
             logger.info(f"Compile error for chal {chal.chal_id}")
 
-        elif res.status in [
+        elif res.status in (
             SandboxStatus.TimeLimitExceeded,
             SandboxStatus.MemoryLimitExceeded,
             SandboxStatus.OutputLimitExceeded,
-        ]:
+        ):
             chal.result.total_result.status = Status.CompileLimitExceeded
             logger.info(f"Compile limit exceeded for chal {chal.chal_id}, limit type: {res.status}")
         elif res.status == SandboxStatus.RunnerError:

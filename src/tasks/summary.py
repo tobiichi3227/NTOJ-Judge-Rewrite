@@ -36,10 +36,10 @@ class SummaryTask(Task):
                 testdata_result = result.testdata_results[testdata.id]
 
                 if testdata_result.status and testdata_result.status != Status.Skipped:
-                    assert testdata_result.status not in [
+                    assert testdata_result.status not in (
                         Status.CompileError,
                         Status.CompileLimitExceeded,
-                    ]
+                    )
                     subtask_result.memory += testdata_result.memory
                     subtask_result.time = max(subtask_result.time, testdata_result.time)
                     if subtask_result.status:
@@ -49,15 +49,15 @@ class SummaryTask(Task):
                     else:
                         subtask_result.status = testdata_result.status
 
-                if subtask_result.status in [
+                if subtask_result.status in (
                     Status.Accepted,
                     Status.PartialCorrect,
-                ]:
-                    if chal.problem_context.checker_type in [
+                ):
+                    if chal.problem_context.checker_type in (
                         CheckerType.CMS_TPS_TESTLIB,
                         CheckerType.STD_TESTLIB,
                         CheckerType.TOJ,
-                    ]:
+                    ):
                         if chal.problem_context.summary_type == SummaryType.GROUPMIN:
                             subtask_result.score = min(
                                 subtask_result.score,
@@ -77,10 +77,10 @@ class SummaryTask(Task):
                 subtask_result.score = decimal.Decimal()
 
             for dep_subtask in chal.subtasks[subtask_id].dependency_subtasks:
-                if result.subtask_results[dep_subtask].status not in [
+                if result.subtask_results[dep_subtask].status not in (
                     Status.Accepted,
                     Status.PartialCorrect,
-                ]:
+                ):
                     subtask_result.status = Status.Skipped
                     subtask_result.score = decimal.Decimal()
                     subtask_result.memory = 0
@@ -89,12 +89,12 @@ class SummaryTask(Task):
         # NOTE: This only occur CE/CLE/JE (when checker / summary got CE/CLE)
         for testdata_result in result.testdata_results.values():
             if not testdata_result.status:
-                assert result.total_result.status in [
+                assert result.total_result.status in (
                     Status.CompileError,
                     Status.CompileLimitExceeded,
                     Status.JudgeError,
                     Status.InternalError,
-                ]
+                )
                 testdata_result.status = Status.Skipped
 
         # NOTE: This only occur CE/CLE/JE (when checker / summary got CE/CLE) or subtask without having any testdata
@@ -104,12 +104,12 @@ class SummaryTask(Task):
                     subtask_result.status = Status.JudgeError
                     continue
 
-                assert result.total_result.status in [
+                assert result.total_result.status in (
                     Status.CompileError,
                     Status.CompileLimitExceeded,
                     Status.JudgeError,
                     Status.InternalError,
-                ]
+                )
                 subtask_result.status = Status.Skipped
 
         # NOTE: is no None means already CE/CLE/JE/IE

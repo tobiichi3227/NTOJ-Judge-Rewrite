@@ -80,11 +80,11 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
             link_task(compile_task, exec_task)
 
         assert isinstance(chal.problem_context, CheckerMixin)
-        if chal.problem_context.checker_type in [
+        if chal.problem_context.checker_type in (
             CheckerType.CMS_TPS_TESTLIB,
             CheckerType.STD_TESTLIB,
             CheckerType.TOJ,
-        ]:
+        ):
             checker_compile_task = TaskEntry(
                 CompileTask(CheckerCompilationTarget(self)),
                 chal.internal_id,
