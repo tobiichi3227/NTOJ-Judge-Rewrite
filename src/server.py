@@ -60,7 +60,6 @@ def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
             utils.logger.info(f"Finish task {task.task_id} for challenge {chal.chal_id}")
             task.task.finish(chal, task)
             utils.logger.info(f"Task {task.task_id} for challenge {chal.chal_id} finished")
-        finish_queue.put(task)
     except Exception as e:
         import traceback
 
@@ -86,10 +85,11 @@ def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
 
         chal.box.cleanup()
 
-        task_running_cnt -= 1
         chal.reporter(
             {"chal_id": chal.chal_id, "task": "summary", "result": chal.result}
         )
+    finally:
+        finish_queue.put(task)
 
 
 def task_loop():
