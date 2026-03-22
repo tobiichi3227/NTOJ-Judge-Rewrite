@@ -52,11 +52,11 @@ class ScoringTask(Task):
     def setup(self, chal: Challenge, task: TaskEntry) -> bool:
         assert isinstance(chal.problem_context, CheckerMixin)
         # NOTE: Check CE / CLE / JE
-        if chal.result.total_result.status in [
+        if chal.result.total_result.status in (
             Status.CompileError,
             Status.CompileLimitExceeded,
             Status.JudgeError,
-        ]:
+        ):
             return False
 
         # NOTE: TOJ Format Checker allow all status
@@ -70,7 +70,7 @@ class ScoringTask(Task):
 
     def run(self, chal: Challenge, task: TaskEntry):
         assert isinstance(chal.problem_context, CheckerMixin)
-        assert chal.problem_context.checker_type not in [CheckerType.TOJ, CheckerType.IOREDIR], (
+        assert chal.problem_context.checker_type not in (CheckerType.TOJ, CheckerType.IOREDIR), (
             "TODO: CheckerType TOJ and IOREDIR"
         )
         logger.debug(f"Scoring testdata {self.testdata.id} for chal {chal.chal_id} with checker type {chal.problem_context.checker_type}")
@@ -78,13 +78,13 @@ class ScoringTask(Task):
         in_name = generate_random_string(11)
         out_name = generate_random_string(10)
         ans_name = generate_random_string(10)
-        if chal.problem_context.checker_type in [
+        if chal.problem_context.checker_type in (
             CheckerType.DIFF,
             CheckerType.DIFF_STRICT,
             CheckerType.DIFF_FLOAT4,
             CheckerType.DIFF_FLOAT6,
             CheckerType.DIFF_FLOAT9,
-        ]:
+        ):
             # TODO: random "in", "out", "ans" string for security
             exec, args = langs[Compiler.clang_cpp_17].get_execute_command(
                 "checker", args=[in_name, out_name, ans_name]
@@ -116,10 +116,10 @@ class ScoringTask(Task):
                 logger.info(f"Testdata {self.testdata.id} wrong answer for chal {chal.chal_id}, checker status: {res.status}")
                 chal.result.testdata_results[self.testdata.id].status = Status.WrongAnswer
 
-        elif chal.problem_context.checker_type in [
+        elif chal.problem_context.checker_type in (
             CheckerType.CMS_TPS_TESTLIB,
             CheckerType.STD_TESTLIB,
-        ]:
+        ):
             assert isinstance(chal.problem_context, UserProgramMixin)
             assert chal.problem_context.checker_compiler
             lang = langs[chal.problem_context.checker_compiler]
@@ -198,17 +198,17 @@ class ScoringTask(Task):
                 testdata_result.score = decimal.Decimal(score)
 
             elif chal.problem_context.checker_type == CheckerType.STD_TESTLIB:
-                if res.status not in [
+                if res.status not in (
                     SandboxStatus.Normal,
                     SandboxStatus.NonzeroExitStatus,
-                ]:
+                ):
                     self.set_testdata_result_je(chal, "checker runtime error")
                     return
 
                 if res.exit_status == 0:
                     testdata_result.status = Status.Accepted
                     logger.info(f"Testdata {self.testdata.id} accepted for chal {chal.chal_id}")
-                elif res.exit_status in [1, 2]:
+                elif res.exit_status in (1, 2):
                     testdata_result.status = Status.WrongAnswer
                     logger.info(f"Testdata {self.testdata.id} wrong answer for chal {chal.chal_id}")
                 elif res.exit_status == 3:
@@ -241,10 +241,10 @@ class ScoringTask(Task):
             }
         )
 
-        if chal.result.testdata_results[self.testdata.id].status not in [
+        if chal.result.testdata_results[self.testdata.id].status not in (
             Status.Accepted,
             Status.PartialCorrect,
-        ]:
+        ):
             chal.skip_subtasks.update(self.testdata.subtasks)
 
         assert self.testdata.useroutput_path
