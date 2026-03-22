@@ -494,18 +494,23 @@ func start() (*runner.Result, error) {
 		rt.ProcPeak = procPeak
 	}
 	if rt.Status == runner.StatusTimeLimitExceeded || rt.Status == runner.StatusNormal {
-		if rt.Time > limit.TimeLimit {
+		if rt.Time >= limit.TimeLimit {
 			rt.Status = runner.StatusTimeLimitExceeded
 		} else {
 			rt.Status = runner.StatusNormal
 		}
 	}
 	if rt.Status == runner.StatusMemoryLimitExceeded || rt.Status == runner.StatusNormal {
-		if rt.Memory > limit.MemoryLimit {
+		if rt.Memory >= limit.MemoryLimit {
 			rt.Status = runner.StatusMemoryLimitExceeded
 		} else {
 			rt.Status = runner.StatusNormal
 		}
+	}
+
+	oom, err := cg.OOMEventCount()
+	if err == nil && oom > 0 {
+		rt.Status = runner.StatusMemoryLimitExceeded
 	}
 
 	if rt.Status == runner.StatusNormal && rt.ExitStatus != 0 && rt.RunningTime > time.Duration(realTimeLimit) {
