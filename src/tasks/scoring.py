@@ -139,7 +139,7 @@ class ScoringTask(Task):
                 stdout=chal.box.gen_filepath(f"{self.testdata.id}-checker-stdout"),
                 stderr=chal.box.gen_filepath(f"{self.testdata.id}-checker-stderr"),
                 allow_proc=lang.allow_thread_count > 1,
-                allow_mount_proc=lang == Compiler.java,
+                allow_mount_proc= lang == langs[Compiler.java],
             )
             assert chal.problem_context.checker_path
             param.add_copy_in_path(chal.problem_context.checker_path, "checker")

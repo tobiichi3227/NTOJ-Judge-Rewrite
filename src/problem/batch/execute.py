@@ -90,7 +90,7 @@ class BatchExecuteTask(Task):
             stdin=stdin_path,
             stdout=chal.box.gen_filepath(f"{self.testdata.id}-stdout"),
             allow_proc=lang.allow_thread_count > 1,
-            allow_mount_proc=lang == Compiler.java,
+            allow_mount_proc=lang == langs[Compiler.java],
             cpuset=cpuset
         )
         assert chal.problem_context.userprog_path
