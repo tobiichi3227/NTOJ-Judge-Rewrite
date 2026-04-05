@@ -183,9 +183,15 @@ class ScoringTask(Task):
                     return
 
                 if score >= 1.0:
+                    score = 1.0
+                    if score > 1.0:
+                        logger.warning(f"Checker score for testdata {self.testdata.id} exceeds 1.0, treating as 1.0")
                     testdata_result.status = Status.Accepted
                     logger.info(f"Testdata {self.testdata.id} accepted with full score for chal {chal.chal_id}")
                 elif score <= 0.0:
+                    if score < 0.0:
+                        logger.warning(f"Checker score for testdata {self.testdata.id} below 0.0, treating as 0.0")
+                    score = 0.0
                     chal.result.testdata_results[
                         self.testdata.id
                     ].status = Status.WrongAnswer
