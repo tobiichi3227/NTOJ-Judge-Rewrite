@@ -135,10 +135,10 @@ class ScoringTask(Task):
                 time_limit=chal.limits.time // 10**6,
                 memory_limit=chal.limits.memory // 1024,
                 stack_limit=65536,
-                proc_limit=lang.allow_thread_count,
+                proc_limit=16,
                 stdout=chal.box.gen_filepath(f"{self.testdata.id}-checker-stdout"),
                 stderr=chal.box.gen_filepath(f"{self.testdata.id}-checker-stderr"),
-                allow_proc=lang.allow_thread_count > 1,
+                allow_proc=True,
                 allow_mount_proc= lang == langs[Compiler.java],
             )
             assert chal.problem_context.checker_path
