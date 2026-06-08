@@ -4,6 +4,38 @@ from lang.base import CompiledLang, reg_lang
 from models import Compiler
 from sandbox.sandbox import ChallengeBox, SandboxParams
 
+@dataclass
+class _ICXC11(CompiledLang):
+    standard: str
+    def compile(
+        self,
+        box: ChallengeBox,
+        copyin: list[tuple[str, str]],
+        sources: list[str],
+        addition_args: list[str],
+        executable_name: str,
+    ):
+        commands = f"source /opt/intel/oneapi/setvars.sh && icx {self.standard} -O2 -pipe -static -s -o {executable_name} {' '.join(sources)} {' '.join(addition_args)} -lm"
+        param = SandboxParams(
+            exe_path="/usr/bin/bash",
+            args=['-c', commands],
+            stderr=box.gen_filepath("stderr"),
+            copy_out_cache_files=[executable_name],
+            time_limit=10000,  # 10 sec
+            memory_limit=1024 << 20,  # 512 MB
+            proc_limit=10,
+            output_limit=64 << 20,  # 64 MB
+            allow_proc=True,
+            allow_mount_proc=False,
+            # TODO: cpuset
+            extra_env=["PATH=/usr/bin:/bin"],
+        )
+        param.add_bind_path("/opt", "opt", False)
+        for src, dst in copyin:
+            param.add_copy_in_path(src, dst, True)
+        logger.info(' '.join(param.to_flags()))
+        res = box.run_sandbox([param])
+        return res[0]
 
 @dataclass
 class _C11(CompiledLang):
@@ -72,4 +104,17 @@ reg_lang(
         compiler="/usr/bin/clang",
         standard="-std=c11",
     ),
+)
+
+reg_lang(
+    Compiler.icx_c_11,
+    _ICXC11(
+        name="c",
+        header_ext=".h",
+        source_ext=".c",
+        object_ext=".o",
+        executable_ext="",
+        allow_thread_count=1,
+        standard="-std=c11",
+    )
 )

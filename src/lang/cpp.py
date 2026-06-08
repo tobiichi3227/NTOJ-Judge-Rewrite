@@ -4,6 +4,37 @@ from lang.base import CompiledLang, reg_lang
 from models import Compiler
 from sandbox.sandbox import ChallengeBox, SandboxParams
 
+@dataclass
+class _ICXCpp17(CompiledLang):
+    standard: str
+    def compile(
+        self,
+        box: ChallengeBox,
+        copyin: list[tuple[str, str]],
+        sources: list[str],
+        addition_args: list[str],
+        executable_name: str,
+    ):
+        commands = f"source /opt/intel/oneapi/setvars.sh && icpx {self.standard} -O3 -march=native -pipe -static -s -o {executable_name} {' '.join(sources)} {' '.join(addition_args)}"
+        param = SandboxParams(
+            exe_path="/usr/bin/bash",
+            args=['-c', commands],
+            stderr=box.gen_filepath("stderr"),
+            copy_out_cache_files=[executable_name],
+            time_limit=10000,  # 10 sec
+            memory_limit=1024 << 20,  # 512 MB
+            proc_limit=10,
+            output_limit=64 << 20,  # 64 MB
+            allow_proc=True,
+            allow_mount_proc=True,
+            # TODO: cpuset
+            extra_env=["PATH=/usr/bin:/bin"],
+        )
+        param.add_bind_path("/opt", "opt", False)
+        for src, dst in copyin:
+            param.add_copy_in_path(src, dst)
+        res = box.run_sandbox([param])
+        return res[0]
 
 @dataclass
 class _Cpp17(CompiledLang):
@@ -72,4 +103,17 @@ reg_lang(
         compiler="/usr/bin/clang++",
         standard="-std=c++17",
     ),
+)
+
+reg_lang(
+    Compiler.icpx_cpp_17,
+    _ICXCpp17(
+        name="cpp",
+        header_ext=".h",
+        source_ext=".cpp",
+        object_ext=".o",
+        executable_ext="",
+        allow_thread_count=1,
+        standard="-std=c++17",
+    )
 )

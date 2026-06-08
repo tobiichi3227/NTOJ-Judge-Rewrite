@@ -48,6 +48,10 @@ class Compiler(IntEnum):
     java = 7
     asm_with_libc = 8
     asm_with_libstdcpp = 9
+    asm_aarch64_with_libc = 100
+    asm_riscv64_with_libc = 101
+    icx_c_11 = 102
+    icpx_cpp_17 = 103
 
 
 class CheckerType(IntEnum):
