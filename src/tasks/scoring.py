@@ -112,9 +112,12 @@ class ScoringTask(Task):
             if res.status == SandboxStatus.Normal:
                 testdata_result.status = Status.Accepted
                 logger.info(f"Testdata {self.testdata.id} accepted for chal {chal.chal_id}")
-            else:
-                logger.info(f"Testdata {self.testdata.id} wrong answer for chal {chal.chal_id}, checker status: {res.status}")
+            elif res.status == SandboxStatus.NonzeroExitStatus:
+                logger.info(f"Testdata {self.testdata.id} wrong answer for chal {chal.chal_id}, checker exit code: {res.exit_status}")
                 chal.result.testdata_results[self.testdata.id].status = Status.WrongAnswer
+            else:
+                logger.error(f"Checker runtime error for chal {chal.chal_id} testdata {self.testdata.id}, checker status: {res.status}")
+                chal.result.testdata_results[self.testdata.id].status = Status.JudgeError
 
         elif chal.problem_context.checker_type in (
             CheckerType.CMS_TPS_TESTLIB,
