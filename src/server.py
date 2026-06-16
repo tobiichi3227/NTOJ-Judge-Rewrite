@@ -11,7 +11,7 @@ import shlex
 import atexit
 import threading
 from multiprocessing.dummy import Pool as ThreadingPool
-from queue import PriorityQueue, Queue
+from queue import Empty, PriorityQueue, Queue
 
 from utils.challenge_builder import parse_base_challenge_info, parse_testdatas_and_subtasks
 
@@ -37,33 +37,56 @@ task_list: dict[int, TaskEntry] = {}
 task_queue: PriorityQueue[TaskEntry] = PriorityQueue()
 finish_queue = Queue()
 task_event = threading.Event()
-task_running_cnt = 0
-threading_pool: multiprocessing.pool.Pool = ThreadingPool()
+task_graph_lock = threading.Lock()
+running_slots = threading.BoundedSemaphore(config.JUDGE_TASK_MAXCONCURRENT)
+threading_pool: multiprocessing.pool.Pool = ThreadingPool(config.JUDGE_TASK_MAXCONCURRENT)
 
 def remove_task(task: TaskEntry):
-    for next in task.edges:
-        next_task = task_list[next]
-        next_task.indeg_cnt -= 1
+    ready_tasks = []
+    with task_graph_lock:
+        for next in task.edges:
+            next_task = task_list[next]
+            next_task.indeg_cnt -= 1
 
-        if next_task.indeg_cnt == 0:
-            task_queue.put(next_task)
-    task_list.pop(task.task_id)
+            if next_task.indeg_cnt == 0:
+                ready_tasks.append(next_task)
+        task_list.pop(task.task_id)
+
+    for next_task in ready_tasks:
+        task_queue.put(next_task)
+
+
+def should_run_cancelled_task(task: TaskEntry) -> bool:
+    return task.task.should_run_when_cancelled()
 
 
 def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
-    global task_running_cnt
+    run_when_cancelled = should_run_cancelled_task(task)
     try:
+        if chal.cancelled and not run_when_cancelled:
+            utils.logger.info(f"Skip task {task.task_id} for cancelled challenge {chal.chal_id}")
+            return
+
         utils.logger.info(f"Start task {task.task_id} for challenge {chal.chal_id}")
         if task.task.setup(chal, task):
+            if chal.cancelled and not run_when_cancelled:
+                utils.logger.info(f"Skip task {task.task_id} for cancelled challenge {chal.chal_id}")
+                return
+
             utils.logger.info(f"Running task {task.task_id} for challenge {chal.chal_id}")
             task.task.run(chal, task)
             utils.logger.info(f"Finish task {task.task_id} for challenge {chal.chal_id}")
-            task.task.finish(chal, task)
+            if not chal.cancelled or run_when_cancelled:
+                task.task.finish(chal, task)
             utils.logger.info(f"Task {task.task_id} for challenge {chal.chal_id} finished")
+        elif run_when_cancelled:
+            task.task.finish(chal, task)
+            utils.logger.info(f"Finalizer task {task.task_id} for challenge {chal.chal_id} finished without run")
     except Exception as e:
         import traceback
 
         traceback.print_exception(e)
+        chal.cancelled = True
         chal.result.total_result.status = Status.InternalError
         chal.result.total_result.memory = 0
         chal.result.total_result.time = 0
@@ -83,35 +106,43 @@ def run_task(chal: Challenge, task: TaskEntry, finish_queue: Queue[TaskEntry]):
             )
             chal.result.total_result.message_type = MessageType.TEXT
 
-        chal.box.cleanup()
-
-        chal.reporter(
-            {"chal_id": chal.chal_id, "task": "summary", "result": chal.result}
-        )
+        if run_when_cancelled:
+            chal.box.cleanup()
+            chal.reporter(
+                {"chal_id": chal.chal_id, "task": "summary", "result": chal.result}
+            )
     finally:
         finish_queue.put(task)
 
 
 def task_loop():
-    global task_running_cnt
     while task_event.wait() and server_running:
-        while task_running_cnt < config.JUDGE_TASK_MAXCONCURRENT:
-            task = task_queue.get()
-            threading_pool.apply_async(
-                run_task,
-                (challenge_list[task.internal_id], task, finish_queue),
-            )
-            task_running_cnt += 1
-
         task_event.clear()
+        while server_running:
+            if not running_slots.acquire(blocking=False):
+                break
+
+            try:
+                task = task_queue.get_nowait()
+            except Empty:
+                running_slots.release()
+                break
+
+            try:
+                threading_pool.apply_async(
+                    run_task,
+                    (challenge_list[task.internal_id], task, finish_queue),
+                )
+            except Exception:
+                running_slots.release()
+                raise
 
 
 def finish_task_loop():
-    global task_running_cnt
     while server_running:
         finish_task = finish_queue.get()
         remove_task(finish_task)
-        task_running_cnt -= 1
+        running_slots.release()
         task_event.set()
 
 
@@ -173,10 +204,15 @@ def build_challenge(obj: dict):
     return chal, tasks
 
 def push_tasks(tasks: list[TaskEntry]):
-    for task in tasks:
-        task_list[task.task_id] = task
-        if task.indeg_cnt == 0:
-            task_queue.put(task)
+    ready_tasks = []
+    with task_graph_lock:
+        for task in tasks:
+            task_list[task.task_id] = task
+            if task.indeg_cnt == 0:
+                ready_tasks.append(task)
+
+    for task in ready_tasks:
+        task_queue.put(task)
 
     task_event.set()
 

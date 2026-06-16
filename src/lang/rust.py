@@ -24,7 +24,7 @@ class _Rust(CompiledLang):
                 sources[0],
                 *addition_args,
             ],
-            stderr=box.gen_filepath("stderr"),
+            stderr=box.gen_filepath(f"{executable_name}-stderr"),
             copy_out_cache_files=[executable_name],
             time_limit=10000,  # 10 sec
             memory_limit=1024 << 20,  # 1024 MB

@@ -1,5 +1,6 @@
 import os
 import shutil
+import threading
 
 from models import (
     MessageType,
@@ -21,10 +22,12 @@ from problem.mixins import UserProgramMixin
 from sandbox.sandbox import SandboxParams
 
 execute_id = 0
+execute_id_lock = threading.Lock()
 def next_execute_id() -> int:
     global execute_id
-    execute_id += 1
-    return execute_id
+    with execute_id_lock:
+        execute_id += 1
+        return execute_id
 
 class BatchExecuteTask(Task):
     def __init__(self, testdata: TestData):

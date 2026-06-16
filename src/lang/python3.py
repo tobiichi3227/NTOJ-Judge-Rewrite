@@ -25,7 +25,7 @@ class _Python(BaseLang):
                 sources[0].removesuffix(self.source_ext),
                 executable_name,
             ],
-            stderr=box.gen_filepath("stderr"),
+            stderr=box.gen_filepath(f"{executable_name}-stderr"),
             copy_out_cache_files=[executable_name],
             time_limit=10000,  # 10 sec
             memory_limit=512 << 20,  # 512 MB

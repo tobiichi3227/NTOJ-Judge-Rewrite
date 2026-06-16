@@ -195,6 +195,7 @@ class Challenge:
 
     testdatas: dict[int, TestData] = field(default_factory=dict)
     subtasks: dict[int, Subtask] = field(default_factory=dict)
+    cancelled: bool = False
 
 
 @dataclass(slots=True)
@@ -210,6 +211,9 @@ class Task(ABC):
     @abstractmethod
     def finish(self, chal: Challenge, task: "TaskEntry"):
         pass
+
+    def should_run_when_cancelled(self) -> bool:
+        return False
 
 @dataclass(slots=True)
 class TaskEntry:

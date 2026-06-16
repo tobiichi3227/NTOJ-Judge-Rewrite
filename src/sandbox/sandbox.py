@@ -4,6 +4,7 @@ import subprocess
 from dataclasses import dataclass, field
 import select
 import json
+import threading
 import uuid
 
 import utils
@@ -231,6 +232,8 @@ class ChallengeBox:
         self.root = os.path.join(base_tmp_path, str(id))
         self.fifo_folder = os.path.join(self.root, "fifo")
         self.file_folder = os.path.join(self.root, "file")
+        self._cleanup_lock = threading.Lock()
+        self._cleaned = False
         os.mkdir(self.root)
         os.mkdir(self.file_folder)
         os.mkdir(self.fifo_folder)
@@ -270,9 +273,15 @@ class ChallengeBox:
             os.remove(path)
 
     def cleanup(self):
-        for fifo in os.listdir(self.fifo_folder):
-            os.remove(os.path.join(self.fifo_folder, fifo))
-        shutil.rmtree(self.root)
+        with self._cleanup_lock:
+            if self._cleaned:
+                return
+            self._cleaned = True
+
+        if os.path.isdir(self.fifo_folder):
+            for fifo in os.listdir(self.fifo_folder):
+                os.remove(os.path.join(self.fifo_folder, fifo))
+        shutil.rmtree(self.root, ignore_errors=True)
 
     def __alloc_workdir(self, tag: str) -> str:
         assert tag, "Must provide a tag to alloc workdir"
@@ -282,6 +291,9 @@ class ChallengeBox:
         return workdir
 
     def run_sandbox(self, params_list: list[SandboxParams]) -> list[SandboxResult]:
+        if self._cleaned:
+            raise RuntimeError("ChallengeBox already cleaned up")
+
         # TODO: copy out
         # TODO: wait multiple processes
         procs: list[tuple[subprocess.Popen, SandboxParams]] = []

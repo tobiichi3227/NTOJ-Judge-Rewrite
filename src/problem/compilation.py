@@ -82,11 +82,12 @@ class UserProgramCompilationTarget(CompilationTarget):
 
     def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
         logger.info(f"User program compilation failed for chal {chal.chal_id}, status: {res.status}")
-        stderr = chal.box.get_file("stderr")
+        stderr_name = f"{self.get_output_name(chal)}-stderr"
+        stderr = chal.box.get_file(stderr_name)
         if stderr:
             with open(stderr) as f:
                 chal.result.total_result.ce_message = f.read()
-            chal.box.delete_file("stderr")
+            chal.box.delete_file(stderr_name)
 
         chal.result.total_result.message_type = MessageType.TEXT
         if res.status in (SandboxStatus.NonzeroExitStatus, SandboxStatus.Signalled):
@@ -157,8 +158,9 @@ class CheckerCompilationTarget(CompilationTarget):
         logger.error(f"Checker compilation failed for chal {chal.chal_id}, status: {res.status}")
         chal.result.total_result.status = Status.JudgeError
         chal.result.total_result.message_type = MessageType.TEXT
-        stderr = chal.box.get_file("stderr")
+        stderr_name = f"{self.get_output_name(chal)}-stderr"
+        stderr = chal.box.get_file(stderr_name)
         if stderr:
             with open(stderr) as f:
                 chal.result.total_result.ce_message = f.read()
-            chal.box.delete_file("stderr")
+            chal.box.delete_file(stderr_name)
