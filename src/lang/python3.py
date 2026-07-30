@@ -48,6 +48,8 @@ class _Python(BaseLang):
         command = [executable_name] + args
         return "/usr/bin/python3", command
 
+    def need_compile(self) -> bool:
+        return True
 
 reg_lang(
     Compiler.python3,
