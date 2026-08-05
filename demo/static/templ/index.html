@@ -1,0 +1,187 @@
+{% from server import COMPILER_INFOS, Compiler, ChalConst%}
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>NTOJ-Judge-Rewrite</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css"
+            integrity="sha512-b2QcS5SsA8tZodcDtGRELiGv5SaKSk1vDHDaQRda0htPYWZ6046lr3kJ5bAAQdpV2mmA/4v0wQF9MyU6/pDIAg=="
+            crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.min.js"
+            integrity="sha512-WW8/jxkELe2CAiE4LvQfwm1rajOS8PHasCCx+knHG0gBHt8EXxS6T6tJRTGuDQVnluuAvMxWF4j8SNFDKceLFg=="
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script type="text/javascript">
+            let chal_id = -1;
+            let polling = false;
+            function submitCode() {
+                const compiler = document.getElementById("compilerList").value;
+                const code = document.getElementById("codeArea").value;
+                const input = document.getElementById("inputArea").value;
+                const answer = document.getElementById("answerArea").value;
+
+                body = new URLSearchParams({
+                    compiler: compiler,
+                    code: code,
+                    input: input,
+                    answer: answer
+                })
+                fetch("/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: body
+                })
+                .then(response => response.json())
+                .then(data => {
+                        chal_id = data.chal_id;
+                        if (!polling) {
+                            polling = true;
+                            pollResult();
+                        }
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    alert("An error occurred while submitting the code.");
+                });
+            }
+
+            function pollResult() {
+                updateResult().then(isJudging => {
+                    if (isJudging) {
+                        setTimeout(pollResult, 500)
+                    } else {
+                        polling = false;
+                    }
+                })
+            }
+            
+            function updateResult() {
+                if (chal_id == -1) 
+                    return Promise.resolve(false);
+                
+                return fetch(`/result/${chal_id}`, {
+                    method: 'GET',
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const stateCell = document.getElementById('state');
+                    const timeCell = document.getElementById('time');
+                    const memoryCell = document.getElementById('memory');
+                    const messageCell = document.getElementById('message');
+
+                    stateCell.textContent = data.state_str;
+                    stateCell.className = `state-${data.state}`;
+                    timeCell.textContent = data.time;
+                    memoryCell.textContent = data.memory;
+                    messageCell.textContent = data.message || '';
+
+                    return data.state == "{{ ChalConst.STATE_JUDGE }}"
+                })
+                .catch(error => {
+                    console.error('Error fetching result:', error);
+                });
+            }
+        </script>
+        <style>
+            .state-1 { /* AC */
+            color: #0f0 !important;
+            }
+
+            .state-2 { /* PC */
+            color: #0f0 !important;
+            }
+
+            .state-3 { /* WA */
+            color: #ed784a !important;
+            }
+
+            .state-4 { /* RE */
+            color: #27fff6 !important;
+            }
+
+            .state-5 { /* RESIG */
+            color: #237ac7 !important;
+            }
+
+            .state-6 { /* TLE */
+            color: #70649a !important;
+            }
+
+            .state-7 { /* MLE */
+            color: #e83015 !important;
+            }
+
+            .state-8 { /* OLE */
+            color: #ffeb00 !important;
+            }
+
+            .state-9 { /* CE */
+            color: #ffeb00 !important;
+            }
+
+            .state-10 { /* CLE */
+            color: #ffeb00 !important;
+            }
+
+            /* .state-11 IE */
+            /* .state-100 JUDGE */
+            /* .state-101 NOTSTARTED */
+
+            .state-102 { /* Skipped */
+            color: rgba(220, 226, 230, 0.75) !important;
+            }
+        </style>
+    </head>
+    <body data-bs-theme="dark" class="container flex-column mt-5 mb-5">
+        <div class="mb-3">
+            <label for="compilerList" class="form-label">Compiler</label>
+            <select id="compilerList" class="form-select">
+                {% for compiler in Compiler %}
+                    <option value="{{ compiler }}">
+                        {{ COMPILER_INFOS[compiler].version_name }}
+                    </option>
+                {% end %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label for="codeArea" class="form-label">Source Code</label>
+            <textarea id="codeArea" class="code form-control" placeholder="Paste your code here..." rows="20"></textarea>
+        </div>
+        <div class="row mb-3">
+            <div class="col">
+                <label for="inputArea" class="form-label">Input</label>
+                <textarea id="inputArea" class="input form-control" placeholder="Paste input here..." rows="10"></textarea>
+            </div>
+            <div class="col">
+                <label for="answerArea" class="form-label">Answer</label>
+                <textarea id="answerArea" class="answer form-control" placeholder="Paste answer here..." rows="10"></textarea>
+            </div>
+        </div>
+        <div class="d-grid gap-2">
+            <button type="button" class="btn btn-primary btn-lg" onclick="submitCode()">
+                 Submit Code
+            </button>
+        </div>
+        <div id="result" class="mt-3">
+            <table id="total" class="table mobile-table-sm">
+                <thead>
+                    <tr>
+                        <th>State</th>
+                        <th>Time</th>
+                        <th>Memory</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="states">
+                        <td id="state" class="state-{{ ChalConst.STATE_NOTSTARTED }}">{{ ChalConst.STATE_LONG_STR[ChalConst.STATE_NOTSTARTED] }}</td>
+                        <td id="time">--</td>
+                        <td id="memory">--</td>
+                    </tr>
+                    <tr>
+                        <td colspan="3"><pre id="message"></pre></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </body>
+</html>
