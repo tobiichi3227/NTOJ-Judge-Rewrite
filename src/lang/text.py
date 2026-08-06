@@ -1,9 +1,8 @@
-import os
 from dataclasses import dataclass
 
 from lang.base import BaseLang, reg_lang
 from models import Compiler
-from sandbox.sandbox import ChallengeBox, SandboxParams
+from sandbox.sandbox import ChallengeBox
 
 @dataclass
 class _Text(BaseLang):
@@ -36,7 +35,7 @@ reg_lang(
         header_ext="",
         source_ext=".txt",
         object_ext="",
-        executable_ext=".txt2",
+        executable_ext=".txt",
         allow_thread_count=1,
     ),
 )
