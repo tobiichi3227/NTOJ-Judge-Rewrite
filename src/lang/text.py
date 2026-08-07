@@ -14,7 +14,9 @@ class _Text(BaseLang):
         addition_args: list[str],
         executable_name: str,
     ):
-        return NotImplemented
+        raise NotImplementedError(
+             "text language does not compile; CompileTask should copy the source file instead"
+         )
 
     def get_execute_command(
         self, executable_name: str, main=None, args: list[str] = None
