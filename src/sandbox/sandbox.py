@@ -1,10 +1,13 @@
 import os
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass, field
+from collections.abc import Callable
 import select
 import json
 import threading
+import time
 import uuid
 
 import utils
@@ -81,12 +84,20 @@ class SandboxResult:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class SandboxExecutionResult:
+    results: list[SandboxResult]
+    cancelled_by: int | None = None
+    cancel_requested_indices: frozenset[int] = frozenset()
+
+
 @dataclass(slots=True)
 class SandboxParams:
     exe_path: str = ""
     args: list[str] = field(default_factory=list)
     workdir: str = ""  # 建議由 ChallengeBox 設定
     time_limit: int = 1000 # ms
+    realtime_limit: int = 0 # ms
     memory_limit: int = 262144 # kib
     stack_limit: int = 65536 # kib
     vss_memory_limit: int = 0 # kib
@@ -115,6 +126,10 @@ class SandboxParams:
 
     def set_time_limit(self, time_limit: int):
         self.time_limit = time_limit
+        return self
+
+    def set_realtime_limit(self, realtime_limit: int):
+        self.realtime_limit = realtime_limit
         return self
 
     def set_memory_limit(self, memory_limit: int):
@@ -193,6 +208,7 @@ class SandboxParams:
         flags = [
             "--workpath", self.workdir,
             "--time-limit", str(self.time_limit),
+            "--realtime-limit", str(self.realtime_limit),
             "--memory-limit", str(self.memory_limit),
             "--stack-limit", str(self.stack_limit),
             "--proc-limit", str(self.proc_limit),
@@ -290,40 +306,134 @@ class ChallengeBox:
         os.makedirs(workdir)
         return workdir
 
-    def run_sandbox(self, params_list: list[SandboxParams]) -> list[SandboxResult]:
+    @staticmethod
+    def __read_result(proc: subprocess.Popen) -> SandboxResult:
+        assert proc.stdout
+        stdout_data = proc.stdout.read().decode("utf-8").strip()
+        proc.stdout.close()
+        try:
+            result_dict = json.loads(stdout_data)
+            return SandboxResult.from_dict(result_dict)
+        except Exception:
+            utils.logger.error(f"Sandbox parse error: {stdout_data}")
+            return SandboxResult(8, 0, "parse error", 0, 0, 0, 0)
+
+    @staticmethod
+    def __interrupt(proc: subprocess.Popen) -> bool:
+        if proc.poll() is not None:
+            return False
+        try:
+            # The Go runner handles SIGINT by cancelling the sandboxed process
+            # and cleaning up its namespace and cgroup.
+            proc.send_signal(signal.SIGINT)
+            return True
+        except ProcessLookupError:
+            return False
+
+    def __run_sandbox(
+        self,
+        params_list: list[SandboxParams],
+        select_stop: Callable[[dict[int, SandboxResult]], int | None] | None,
+    ) -> SandboxExecutionResult:
         if self._cleaned:
             raise RuntimeError("ChallengeBox already cleaned up")
 
         # TODO: copy out
-        # TODO: wait multiple processes
         procs: list[tuple[subprocess.Popen, SandboxParams]] = []
-        for params in params_list:
-            params.workdir = self.__alloc_workdir(tag=str(uuid.uuid4()))
-            proc = subprocess.Popen(
-                ["./sandbox/sandbox"] + params.to_flags(),
-                stdout=subprocess.PIPE,
-            )
-            if proc.stdin:
-                proc.stdin.close()
-            procs.append((proc, params))
+        results: list[SandboxResult | None] = [None] * len(params_list)
+        cancelled_by = None
+        cancel_requested_indices: set[int] = set()
+        try:
+            # Popen is intentionally performed in list order. Communication
+            # tasks put the manager first, followed by contestant processes.
+            for params in params_list:
+                params.workdir = self.__alloc_workdir(tag=str(uuid.uuid4()))
+                proc = subprocess.Popen(
+                    ["./sandbox/sandbox"] + params.to_flags(),
+                    stdout=subprocess.PIPE,
+                )
+                if proc.stdin:
+                    proc.stdin.close()
+                procs.append((proc, params))
 
-        for proc in procs:
-            proc[0].wait()
+            remaining = set(range(len(procs)))
+            while remaining:
+                completed = []
+                for index in remaining:
+                    proc, _ = procs[index]
+                    if proc.poll() is not None:
+                        completed.append(index)
 
-        results = []
-        for proc, params in procs:
-            stdout_data = proc.stdout.read().decode("utf-8").strip()
-            try:
-                result_dict = json.loads(stdout_data)
-                result = SandboxResult.from_dict(result_dict)
-            except Exception:
-                utils.logger.error(f"Sandbox parse error: {stdout_data}")
-                result = SandboxResult(8, 0, "parse error", 0, 0, 0, 0)
-            results.append(result)
-            for fname in params.copy_out_cache_files:
-                src_path = os.path.join(params.workdir, fname)
-                dst_path = os.path.join(self.file_folder, fname)
-                if os.path.isfile(src_path):
-                    os.rename(src_path, dst_path)
-            shutil.rmtree(params.workdir, ignore_errors=True)
-        return results
+                if not completed:
+                    time.sleep(0.01)
+                    continue
+
+                completed_results = {}
+                for index in sorted(completed):
+                    proc, _ = procs[index]
+                    result = self.__read_result(proc)
+                    results[index] = result
+                    completed_results[index] = result
+                    remaining.remove(index)
+
+                # Select only after collecting the whole polling batch. This
+                # lets callers define a deterministic priority without the
+                # iteration order deciding which failure wins.
+                if cancelled_by is None and select_stop is not None:
+                    selected_index = select_stop(completed_results)
+                    if selected_index is not None:
+                        if selected_index not in completed_results:
+                            raise ValueError(
+                                "select_stop returned an index outside the "
+                                "completed batch"
+                            )
+                        cancelled_by = selected_index
+                        for other_index in remaining:
+                            if self.__interrupt(procs[other_index][0]):
+                                cancel_requested_indices.add(other_index)
+
+            for index, (_, params) in enumerate(procs):
+                assert results[index] is not None
+                for fname in params.copy_out_cache_files:
+                    src_path = os.path.join(params.workdir, fname)
+                    dst_path = os.path.join(self.file_folder, fname)
+                    if os.path.isfile(src_path):
+                        os.rename(src_path, dst_path)
+        except BaseException:
+            for proc, _ in procs:
+                self.__interrupt(proc)
+            for proc, _ in procs:
+                proc.wait()
+            raise
+        finally:
+            for params in params_list:
+                if params.workdir:
+                    shutil.rmtree(params.workdir, ignore_errors=True)
+
+        # Every slot is filled before returning, so preserving the original
+        # indices is part of the API contract.
+        complete_results = []
+        for result in results:
+            assert result is not None
+            complete_results.append(result)
+        return SandboxExecutionResult(
+            results=complete_results,
+            cancelled_by=cancelled_by,
+            cancel_requested_indices=frozenset(cancel_requested_indices),
+        )
+
+    def run_sandbox(self, params_list: list[SandboxParams]) -> list[SandboxResult]:
+        return self.__run_sandbox(params_list, None).results
+
+    def run_sandbox_with_cancellation(
+        self,
+        params_list: list[SandboxParams],
+        select_stop: Callable[[dict[int, SandboxResult]], int | None],
+    ) -> SandboxExecutionResult:
+        """Run sandboxes concurrently and interrupt peers when requested.
+
+        ``select_stop`` receives all results found in one polling batch and
+        returns the index that should trigger peer cancellation, or ``None``.
+        Results retain the same indices as ``params_list``.
+        """
+        return self.__run_sandbox(params_list, select_stop)

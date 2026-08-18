@@ -132,6 +132,8 @@ var (
 	defaultEnv = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
 )
 
+const statusCancelled = 9
+
 var (
 	addBindPath, addMaskPath, addAllowSyscall, addKillSyscall, addEnv                                                 arrayFlags
 	stdinFile, stdoutFile, stderrFile, workPath, cpuSet                                                               string
@@ -408,8 +410,8 @@ func start() (*runner.Result, error) {
 	}
 	// TODO: Set cpurate
 	rlims := rlimit.RLimits{
-		CPU:         uint64(time.Duration(timeLimit*uint64(time.Millisecond)).Truncate(time.Second)/time.Second) + 1,
-		CPUHard:     realTimeLimit / 1000,
+		CPU:         timeLimit / 1000,
+		CPUHard:     timeLimit / 1000,
 		FileSize:    outputLimit << 10,
 		Stack:       stackLimit << 10,
 		Data:        memoryLimit << 10,
@@ -444,6 +446,7 @@ func start() (*runner.Result, error) {
 	}
 
 	var rt runner.Result
+	cancelled := false
 	// gracefully shutdown
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
@@ -461,9 +464,9 @@ func start() (*runner.Result, error) {
 
 	select {
 	case <-sig:
+		cancelled = true
 		cancel()
 		rt = <-s
-		rt.Status = runner.StatusRunnerError
 
 	case rt = <-s:
 	}
@@ -521,6 +524,9 @@ func start() (*runner.Result, error) {
 	if rt.Status == runner.StatusNormal && rt.ExitStatus != 0 &&
 		rt.Time < time.Duration(timeLimit) && rt.RunningTime < time.Duration(realTimeLimit) {
 		rt.Status = runner.StatusSignalled
+	}
+	if cancelled {
+		rt.Status = statusCancelled
 	}
 	return &rt, nil
 }

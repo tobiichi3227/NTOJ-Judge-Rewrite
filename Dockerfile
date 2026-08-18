@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /src
 COPY src/sandbox .
 RUN apk add --no-cache git && GOPRIVATE=github.com/tobiichi3227/go-sandbox go mod tidy && go build -ldflags="-s -w" -o sandbox .

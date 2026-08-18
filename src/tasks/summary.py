@@ -1,6 +1,5 @@
 import decimal
 from models import (
-    CheckerType,
     MessageType,
     Status,
     SummaryType,
@@ -8,7 +7,7 @@ from models import (
     TaskEntry,
     Challenge,
 )
-from problem.mixins import UserProgramMixin, CheckerMixin, SummaryMixin
+from problem.mixins import SummaryMixin
 from utils import logger
 
 
@@ -28,7 +27,6 @@ class SummaryTask(Task):
 
     def run(self, chal: Challenge, task: TaskEntry):
         assert isinstance(chal.problem_context, SummaryMixin)
-        assert isinstance(chal.problem_context, CheckerMixin)
         assert chal.problem_context.summary_type != SummaryType.CUSTOM, "TODO: Custom summary"
         logger.info(f"Starting summary task for chal {chal.chal_id} with summary type {chal.problem_context.summary_type}")
         result = chal.result
@@ -68,11 +66,7 @@ class SummaryTask(Task):
                     Status.Accepted,
                     Status.PartialCorrect,
                 ):
-                    if chal.problem_context.checker_type in (
-                        CheckerType.CMS_TPS_TESTLIB,
-                        CheckerType.STD_TESTLIB,
-                        CheckerType.TOJ,
-                    ):
+                    if chal.problem_context.uses_testdata_scores():
                         if chal.problem_context.summary_type == SummaryType.GROUPMIN:
                             subtask_result.score = min(
                                 subtask_result.score,
@@ -153,9 +147,9 @@ class SummaryTask(Task):
             result.total_result.message_type = MessageType.TEXT
 
     def finish(self, chal: Challenge, task: TaskEntry):
-        assert isinstance(chal.problem_context, SummaryMixin)
-        assert isinstance(chal.problem_context, CheckerMixin)
-        assert isinstance(chal.problem_context, UserProgramMixin)
+        # assert isinstance(chal.problem_context, SummaryMixin)
+        # assert isinstance(chal.problem_context, CheckerMixin)
+        # assert isinstance(chal.problem_context, UserProgramMixin)
         logger.info(f"Summary finished for chal {chal.chal_id}, final status: {chal.result.total_result.status}")
         chal.reporter(
             {

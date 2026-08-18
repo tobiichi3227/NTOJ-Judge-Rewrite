@@ -14,6 +14,9 @@ class SandboxStatus(IntEnum):
     Signalled = 6
     NonzeroExitStatus = 7
     RunnerError = 8
+    # Internal orchestration status. This must never be exposed as a backend
+    # result status; backend-facing results use the separate Status enum.
+    Cancelled = 9
 
 class Status(IntEnum):
     Accepted = 1
@@ -63,7 +66,12 @@ class CheckerType(IntEnum):
 
     @classmethod
     def need_build_checkers(cls):
-        return [cls.CMS_TPS_TESTLIB, cls.STD_TESTLIB, cls.TOJ, cls.IOREDIR]
+        return (cls.CMS_TPS_TESTLIB, cls.STD_TESTLIB, cls.TOJ, cls.IOREDIR)
+
+
+class CommunicationIOType(IntEnum):
+    STDIO = 0
+    FIFO = 1
 
 
 class TaskType(IntEnum):
@@ -185,6 +193,7 @@ class Challenge:
     result: Result = None
 
     problem_context: 'ProblemContext' = None
+    code_paths: list[tuple[str, str]] = field(default_factory=list)
 
     reporter: FunctionType = lambda: 0
     skip_nonac: bool = False
