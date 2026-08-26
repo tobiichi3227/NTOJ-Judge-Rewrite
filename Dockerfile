@@ -5,12 +5,26 @@ RUN apk add --no-cache git && GOPRIVATE=github.com/tobiichi3227/go-sandbox go mo
 
 FROM debian:13-slim AS release
 
-RUN apt update \
-    && apt install -y wget --no-install-recommends --no-install-suggests \
+RUN apt update -y && apt install -y wget ca-certificates --no-install-recommends --no-install-suggests \
+    && cat > /etc/apt/sources.list.d/debian.sources <<'EOF'
+Types: deb
+URIs: http://ftp.tw.debian.org/debian
+Suites: trixie trixie-updates
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: http://deb.debian.org/debian-security
+Suites: trixie-security
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+
+RUN apt update -y \
     && wget -qO /etc/apt/trusted.gpg.d/intel-oneapi.asc https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
     && echo "deb https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/intel-oneapi.list \
     && apt update -y \
-    && apt install -y make gcc g++ clang llvm python3 python3-pip rustc openjdk-21-jdk-headless intel-oneapi-compiler-dpcpp-cpp crossbuild-essential-arm64 crossbuild-essential-riscv64 qemu-user --no-install-suggests --no-install-recommends \
+    && apt install -y --no-install-suggests --no-install-recommends make gcc g++ clang llvm python3 python3-pip rustc openjdk-21-jdk-headless intel-oneapi-compiler-dpcpp-cpp crossbuild-essential-arm64 crossbuild-essential-riscv64 qemu-user \
     && apt clean \
     && pip install cffi tornado --break-system-packages \
     && rm -rf /var/lib/apt/lists/
