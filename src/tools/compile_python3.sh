@@ -2,7 +2,7 @@
 set -e
 
 if [[ $# -ne 2 ]]; then
-    echo "Usage: $0 <main_module_without_py> <output_pyz>"
+    echo "Usage: $0 <main_module_without_py> <output_pyz>" >&2
     exit 1
 fi
 
@@ -14,7 +14,7 @@ python3 -m compileall -q -o 2 -b . 1>&2
 if [[ -f "${main_py}.pyc" ]]; then
     mv "${main_py}.pyc" "__main__.pyc"
 else
-    echo "Error: ${main_py}.pyc not found"
+    echo "Error: ${main_py}.pyc not found" >&2
     exit 1
 fi
 

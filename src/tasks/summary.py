@@ -1,6 +1,5 @@
 import decimal
 from models import (
-    CheckerType,
     MessageType,
     Status,
     SummaryType,
@@ -8,11 +7,14 @@ from models import (
     TaskEntry,
     Challenge,
 )
-from problem.mixins import UserProgramMixin, CheckerMixin, SummaryMixin
+from problem.mixins import SummaryMixin
 from utils import logger
 
 
 class SummaryTask(Task):
+    def should_run_when_cancelled(self) -> bool:
+        return True
+
     def setup(self, chal: Challenge, task: TaskEntry) -> bool:
         # NOTE: CE / CLE / JE need summary set testdata results and subtask results status to Status.Skipped
         assert isinstance(chal.problem_context, SummaryMixin)
@@ -25,10 +27,21 @@ class SummaryTask(Task):
 
     def run(self, chal: Challenge, task: TaskEntry):
         assert isinstance(chal.problem_context, SummaryMixin)
-        assert isinstance(chal.problem_context, CheckerMixin)
         assert chal.problem_context.summary_type != SummaryType.CUSTOM, "TODO: Custom summary"
         logger.info(f"Starting summary task for chal {chal.chal_id} with summary type {chal.problem_context.summary_type}")
         result = chal.result
+
+        if chal.cancelled:
+            for subtask_result in result.subtask_results.values():
+                subtask_result.memory = subtask_result.time = 0
+                subtask_result.score = decimal.Decimal()
+                subtask_result.status = Status.InternalError
+
+            for testdata_result in result.testdata_results.values():
+                testdata_result.memory = testdata_result.time = 0
+                testdata_result.score = decimal.Decimal()
+                testdata_result.status = Status.InternalError
+            return
 
         for subtask_id, subtask_result in result.subtask_results.items():
             subtask_result.score = decimal.Decimal("Infinity")
@@ -53,11 +66,7 @@ class SummaryTask(Task):
                     Status.Accepted,
                     Status.PartialCorrect,
                 ):
-                    if chal.problem_context.checker_type in (
-                        CheckerType.CMS_TPS_TESTLIB,
-                        CheckerType.STD_TESTLIB,
-                        CheckerType.TOJ,
-                    ):
+                    if chal.problem_context.uses_testdata_scores():
                         if chal.problem_context.summary_type == SummaryType.GROUPMIN:
                             subtask_result.score = min(
                                 subtask_result.score,
@@ -138,9 +147,9 @@ class SummaryTask(Task):
             result.total_result.message_type = MessageType.TEXT
 
     def finish(self, chal: Challenge, task: TaskEntry):
-        assert isinstance(chal.problem_context, SummaryMixin)
-        assert isinstance(chal.problem_context, CheckerMixin)
-        assert isinstance(chal.problem_context, UserProgramMixin)
+        # assert isinstance(chal.problem_context, SummaryMixin)
+        # assert isinstance(chal.problem_context, CheckerMixin)
+        # assert isinstance(chal.problem_context, UserProgramMixin)
         logger.info(f"Summary finished for chal {chal.chal_id}, final status: {chal.result.total_result.status}")
         chal.reporter(
             {

@@ -64,7 +64,7 @@ class _C11(CompiledLang):
                 *addition_args,
                 "-lm",  # NOTE: Math Library
             ],
-            stderr=box.gen_filepath("stderr"),
+            stderr=box.gen_filepath(f"{executable_name}-stderr"),
             copy_out_cache_files=[executable_name],
             time_limit=10000,  # 10 sec
             memory_limit=512 << 20,  # 512 MB

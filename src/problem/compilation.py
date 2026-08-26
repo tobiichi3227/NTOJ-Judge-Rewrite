@@ -3,7 +3,7 @@ import os
 import glob
 
 from models import CompilationTarget, Challenge, SandboxStatus, Status, MessageType, Compiler
-from problem.mixins import UserProgramMixin, CheckerMixin
+from problem.mixins import UserProgramMixin, CheckerMixin, ManagerMixin
 from lang.base import langs
 from sandbox.sandbox import SandboxResult
 from utils import logger
@@ -24,18 +24,33 @@ class UserProgramCompilationTarget(CompilationTarget):
                 return False
 
             if self.context.userprog_compiler == Compiler.python3:
-                grader_path = os.path.join(grader_folder_path, "grader.py")
+                grader_filename = f"{self.context.grader_name}.py"
+                grader_path = os.path.join(grader_folder_path, grader_filename)
                 if not os.path.exists(grader_path):
-                    logger.error(f"grader.py not found for Python3 grader in chal {chal.chal_id}")
+                    logger.error(f"{grader_filename} not found for Python3 grader in chal {chal.chal_id}")
                     chal.result.total_result.status = Status.JudgeError
-                    chal.result.total_result.ie_message = "Python3 version grader need grader.py, but file not found.\n please contact administrator or problem setter."
+                    chal.result.total_result.ie_message = f"Python3 version grader need {grader_filename}, but file not found.\n please contact administrator or problem setter."
                     chal.result.total_result.message_type = MessageType.TEXT
                     return False
+            elif self.context.userprog_compiler == Compiler.java:
+                grader_filename = f"{self.context.grader_name}.java"
+                grader_path = os.path.join(grader_folder_path, grader_filename)
+                if not os.path.exists(grader_path):
+                    logger.error(f"{grader_filename} not found for Java grader in chal {chal.chal_id}")
+                    chal.result.total_result.status = Status.JudgeError
+                    chal.result.total_result.ie_message = f"Java version grader need {grader_filename}, but file not found.\n please contact administrator or problem setter."
+                    chal.result.total_result.message_type = MessageType.TEXT
+                    return False
+
         return True
 
     def get_source_files(self, chal: 'Challenge') -> list[tuple[str, str]]:
         lang = langs[self.context.userprog_compiler]
-        copy_in = [(chal.code_path, f"a{lang.source_ext}")]
+        copy_in = (
+            list(chal.code_paths)
+            if chal.code_paths
+            else [(chal.code_path, f"a{lang.source_ext}")]
+        )
 
         if self.context.has_grader:
             grader_folder_path = os.path.join(chal.res_path, "grader", lang.name)
@@ -48,22 +63,34 @@ class UserProgramCompilationTarget(CompilationTarget):
 
     def get_source_list(self, chal: 'Challenge') -> list[str]:
         lang = langs[self.context.userprog_compiler]
-        sources = [f"a{lang.source_ext}"]
+        sources = (
+            [name for _, name in chal.code_paths]
+            if chal.code_paths
+            else [f"a{lang.source_ext}"]
+        )
         if self.context.has_grader:
             if self.context.userprog_compiler in (
                 Compiler.clang_c_11,
                 Compiler.clang_cpp_17,
                 Compiler.gcc_c_11,
                 Compiler.gcc_cpp_17,
+                Compiler.asm_with_libc,
+                Compiler.asm_with_libstdcpp,
             ):
                 for sourcefile in glob.glob(
                     f"{chal.res_path}/grader/{lang.name}/*{lang.source_ext}"
                 ):
                     sources.append(os.path.basename(sourcefile))
 
-            if self.context.userprog_compiler == Compiler.python3:
-                sources.append("grader.py")
+            elif self.context.userprog_compiler == Compiler.python3:
+                sources.append(f"{self.context.grader_name}.py")
                 sources.reverse()
+            elif self.context.userprog_compiler == Compiler.java:
+                sources.append(f"{self.context.grader_name}.java")
+                sources.reverse()
+
+            elif self.context.userprog_compiler == Compiler.rust:
+                sources = [f"{self.context.grader_name}.rs"]
 
         return sources
 
@@ -82,11 +109,12 @@ class UserProgramCompilationTarget(CompilationTarget):
 
     def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
         logger.info(f"User program compilation failed for chal {chal.chal_id}, status: {res.status}")
-        stderr = chal.box.get_file("stderr")
+        stderr_name = f"{self.get_output_name(chal)}-stderr"
+        stderr = chal.box.get_file(stderr_name)
         if stderr:
             with open(stderr) as f:
                 chal.result.total_result.ce_message = f.read()
-            chal.box.delete_file("stderr")
+            chal.box.delete_file(stderr_name)
 
         chal.result.total_result.message_type = MessageType.TEXT
         if res.status in (SandboxStatus.NonzeroExitStatus, SandboxStatus.Signalled):
@@ -157,8 +185,72 @@ class CheckerCompilationTarget(CompilationTarget):
         logger.error(f"Checker compilation failed for chal {chal.chal_id}, status: {res.status}")
         chal.result.total_result.status = Status.JudgeError
         chal.result.total_result.message_type = MessageType.TEXT
-        stderr = chal.box.get_file("stderr")
+        stderr_name = f"{self.get_output_name(chal)}-stderr"
+        stderr = chal.box.get_file(stderr_name)
         if stderr:
             with open(stderr) as f:
                 chal.result.total_result.ce_message = f.read()
-            chal.box.delete_file("stderr")
+            chal.box.delete_file(stderr_name)
+
+
+@dataclass(slots=True)
+class ManagerCompilationTarget(CompilationTarget):
+    context: 'ManagerMixin'
+
+    def can_compile(self, chal: 'Challenge') -> bool:
+        lang = langs[self.context.manager_compiler]
+        manager_name = f"manager{lang.source_ext}"
+        manager_path = os.path.join(chal.res_path, "grader", manager_name)
+        if os.path.isfile(manager_path):
+            return True
+
+        logger.error(f"Manager file {manager_name} not found in chal {chal.chal_id}")
+        chal.result.total_result.status = Status.JudgeError
+        chal.result.total_result.ie_message = (
+            f"{manager_name} not found, please contact administrator or problem setter"
+        )
+        chal.result.total_result.message_type = MessageType.TEXT
+        return False
+
+    def get_source_files(self, chal: 'Challenge') -> list[tuple[str, str]]:
+        lang = langs[self.context.manager_compiler]
+        manager_name = f"manager{lang.source_ext}"
+        grader_path = os.path.join(chal.res_path, "grader")
+        copy_in = [(os.path.join(grader_path, manager_name), manager_name)]
+
+        for name in os.listdir(grader_path):
+            path = os.path.join(grader_path, name)
+            if name == manager_name or os.path.isdir(path):
+                continue
+            copy_in.append((path, name))
+        return copy_in
+
+    def get_source_list(self, chal: 'Challenge') -> list[str]:
+        lang = langs[self.context.manager_compiler]
+        return [f"manager{lang.source_ext}"]
+
+    def get_compiler(self, chal: 'Challenge') -> 'Compiler':
+        return self.context.manager_compiler
+
+    def get_compile_args(self, chal: 'Challenge') -> list[str]:
+        return self.context.manager_compile_args
+
+    def get_output_name(self, chal: 'Challenge') -> str:
+        return f"manager{langs[self.context.manager_compiler].executable_ext}"
+
+    def on_compile_success(self, chal: 'Challenge', file: str):
+        logger.info(f"Manager compilation succeeded for chal {chal.chal_id}")
+        self.context.manager_path = chal.box.get_file(file)
+
+    def on_compile_failure(self, chal: 'Challenge', res: SandboxResult):
+        logger.error(
+            f"Manager compilation failed for chal {chal.chal_id}, status: {res.status}"
+        )
+        chal.result.total_result.status = Status.JudgeError
+        chal.result.total_result.message_type = MessageType.TEXT
+        stderr_name = f"{self.get_output_name(chal)}-stderr"
+        stderr = chal.box.get_file(stderr_name)
+        if stderr:
+            with open(stderr) as f:
+                chal.result.total_result.ce_message = f.read()
+            chal.box.delete_file(stderr_name)

@@ -16,6 +16,13 @@ from tasks.summary import SummaryTask
 class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, SummaryMixin):
     problem_type: str = "batch"
 
+    def uses_testdata_scores(self) -> bool:
+        return self.checker_type in (
+            CheckerType.CMS_TPS_TESTLIB,
+            CheckerType.STD_TESTLIB,
+            CheckerType.TOJ,
+        )
+
     @classmethod
     def from_json(cls, obj: dict, chal: 'Challenge') -> 'BatchProblemContext':
         logger.info(f"Creating batch problem context for chal {chal.chal_id}")
@@ -70,6 +77,7 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
 
         for exec_task in exec_tasks:
             link_task(compile_task, exec_task)
+        link_task(compile_task, summary_task)
 
         assert isinstance(chal.problem_context, CheckerMixin)
         if chal.problem_context.checker_type in (
@@ -82,9 +90,20 @@ class BatchProblemContext(ProblemContext, UserProgramMixin, CheckerMixin, Summar
                 chal.internal_id,
                 chal.priority,
             )
+            link_task(checker_compile_task, summary_task)
+            for exec_task in exec_tasks:
+                link_task(checker_compile_task, exec_task)
             for scoring_task in scoring_tasks:
                 link_task(checker_compile_task, scoring_task)
             add_task(checker_compile_task)
+
+        if chal.skip_nonac:
+            ordered_task_indexes = sorted(
+                range(len(exec_tasks)),
+                key=lambda i: exec_tasks[i].order,
+            )
+            for prev, cur in zip(ordered_task_indexes, ordered_task_indexes[1:]):
+                link_task(scoring_tasks[prev], exec_tasks[cur])
 
         add_task(compile_task)
         for t in exec_tasks:

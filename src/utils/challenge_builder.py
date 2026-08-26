@@ -1,15 +1,61 @@
 import decimal
+import os
+import shlex
 
-from models import Limits, CheckerType, SummaryType, TestData, Subtask, Compiler, ProblemContext, Challenge, TaskEntry
+from models import (
+    Challenge,
+    CheckerType,
+    CommunicationIOType,
+    Compiler,
+    Limits,
+    ProblemContext,
+    Subtask,
+    SummaryType,
+    TaskEntry,
+    TestData,
+)
+
+
+def parse_compile_args(value) -> list[str]:
+    if isinstance(value, str):
+        return shlex.split(value)
+    return list(value or [])
 
 def parse_base_challenge_info(obj: dict) -> dict:
+    code_paths = []
+    source_names = set()
+    for source in obj.get('code_paths', []):
+        path = source['path']
+        name = source['name']
+        if (
+            not isinstance(path, str)
+            or not isinstance(name, str)
+            or not name
+            or name.startswith(('-', '@'))
+            or '\\' in name
+            or '\x00' in name
+            or name != os.path.basename(name)
+            or name in ('.', '..')
+            or name in source_names
+        ):
+            raise ValueError('Invalid submitted source file')
+        code_paths.append((path, name))
+        source_names.add(name)
+
+    code_path = obj.get('code_path')
+    if code_path is None:
+        if not code_paths:
+            raise ValueError('Missing submitted source file')
+        code_path = code_paths[0][0]
+
     return {
         'chal_id': obj['chal_id'],
         'pro_id': obj['pro_id'],
         'contest_id': obj.get('contest_id', 0),
         'acct_id': obj['acct_id'],
         'priority': obj.get('priority', 0),
-        'code_path': obj['code_path'],
+        'code_path': code_path,
+        'code_paths': code_paths,
         'res_path': obj['res_path'],
         'skip_nonac': obj.get('skip_nonac', False),
         'skip_subtasks': set(obj.get('skip_subtasks', [])),
@@ -30,7 +76,7 @@ def parse_checker_info(obj: dict) -> dict:
     return {
         'checker_type': CheckerType(obj['checker_type']),
         'checker_compiler': Compiler(checker_compiler_val) if checker_compiler_val else None,
-        'checker_compile_args': obj.get('checker_compile_args', []),
+        'checker_compile_args': parse_compile_args(obj.get('checker_compile_args', [])),
     }
 
 
@@ -42,8 +88,26 @@ def parse_summary_info(obj: dict) -> dict:
 def parse_user_program_info(obj: dict) -> dict:
     return {
         'userprog_compiler': Compiler(obj['userprog_compiler']),
-        'userprog_compile_args': obj.get('userprog_compile_args', []),
+        'userprog_compile_args': parse_compile_args(obj.get('userprog_compile_args', [])),
         'has_grader': obj.get('has_grader', False),
+    }
+
+
+def parse_communication_info(obj: dict) -> dict:
+    num_processes = int(obj['num_processes'])
+    if num_processes < 1:
+        raise ValueError("num_processes must be at least 1")
+
+    if num_processes > 64:
+        raise ValueError("num_processes must not exceed 64")
+
+    return {
+        'communication_io_type': CommunicationIOType(
+            obj.get('communication_io_type', CommunicationIOType.FIFO)
+        ),
+        'num_processes': num_processes,
+        'manager_compiler': Compiler(obj['manager_compiler']),
+        'manager_compile_args': parse_compile_args(obj.get('manager_compile_args', [])),
     }
 
 def parse_testdatas_and_subtasks(obj: dict, chal: 'Challenge', context: ProblemContext) -> tuple[dict[int, TestData], dict[int, Subtask]]:

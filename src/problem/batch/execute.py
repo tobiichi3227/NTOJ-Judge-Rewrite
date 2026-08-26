@@ -1,5 +1,6 @@
 import os
 import shutil
+import threading
 
 from models import (
     MessageType,
@@ -21,10 +22,12 @@ from problem.mixins import UserProgramMixin
 from sandbox.sandbox import SandboxParams
 
 execute_id = 0
+execute_id_lock = threading.Lock()
 def next_execute_id() -> int:
     global execute_id
-    execute_id += 1
-    return execute_id
+    with execute_id_lock:
+        execute_id += 1
+        return execute_id
 
 class BatchExecuteTask(Task):
     def __init__(self, testdata: TestData):
@@ -95,6 +98,11 @@ class BatchExecuteTask(Task):
         )
         assert chal.problem_context.userprog_path
         param.add_copy_in_path(chal.problem_context.userprog_path, "a")
+        if chal.problem_context.userprog_compiler == Compiler.java:
+            param.add_bind_path("/usr/lib/jvm/", "usr/lib/jvm/")
+            param.add_bind_path("/etc/java-21-openjdk/", "etc/java-21-openjdk/")
+            param.add_env("JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64")
+
         res = chal.box.run_sandbox([param])[0]
         try:
             os.remove(stdin_path)
