@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: demo
+      target: development
+    command: bash
+    stdin_open: true
+    tty: true
+    volumes:
+      - /srv/ntoj-judge-demo/tmp_dir:/tmp_dir
+    networks:
+      - judge_net
+    ports:
+      - "2503:8080"
+
+  judge:
+    build: ./
+    cap_add:
+      - MKNOD
+      - SYS_ADMIN
+      - SYS_CHROOT
+      - SYS_RESOURCE
+    cgroup: host
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+      - label:disable
+    tmpfs:
+      - /dev/shm:rw,exec,size=755,size=4G
+    volumes:
+      - /srv/ntoj-judge-demo/tmp_dir:/tmp_dir:ro
+    networks:
+      - judge_net
+
+    privileged: true
+
+networks:
+  judge_net:
