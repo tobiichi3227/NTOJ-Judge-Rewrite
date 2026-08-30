@@ -51,6 +51,7 @@ class Compiler(IntEnum):
     java = 7
     asm_with_libc = 8
     asm_with_libstdcpp = 9
+    text = 10
     asm_aarch64_with_libc = 100
     asm_riscv64_with_libc = 101
     icx_c_11 = 102

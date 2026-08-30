@@ -1,3 +1,4 @@
+import shutil
 from dataclasses import dataclass
 from models import (
     SandboxStatus,
@@ -20,6 +21,17 @@ class CompileTask(Task):
 
     def run(self, chal: Challenge, task: TaskEntry):
         lang = langs[self.target.get_compiler(chal)]
+
+        if not lang.need_compile():
+            # Just copy the source file to target executable name
+            src = self.target.get_source_files(chal)[0][0]
+            output_name = self.target.get_output_name(chal)
+            dst = chal.box.gen_filepath(output_name)
+            shutil.copyfile(src, dst)
+
+            self.target.on_compile_success(chal, output_name)
+
+            return
 
         logger.info(f"Compiling chal {chal.chal_id} using {lang.name} compiler...")
         res = lang.compile(
