@@ -23,11 +23,16 @@ class CompileTask(Task):
         lang = langs[self.target.get_compiler(chal)]
 
         if not lang.need_compile():
-            # Just copy the source file to target executable name
-            src = self.target.get_source_files(chal)[0][0]
+            # For non-compiled languages, copy sources directly into the box.
+            copy_in = self.target.get_source_files(chal)
             output_name = self.target.get_output_name(chal)
-            dst = chal.box.gen_filepath(output_name)
-            shutil.copyfile(src, dst)
+
+            src0, dst0 = copy_in[0]
+            shutil.copyfile(src0, chal.box.gen_filepath(output_name))
+            if dst0 != output_name:
+                shutil.copyfile(src0, chal.box.gen_filepath(dst0))
+            for src, dst in copy_in[1:]:
+                shutil.copyfile(src, chal.box.gen_filepath(dst))
 
             self.target.on_compile_success(chal, output_name)
 
