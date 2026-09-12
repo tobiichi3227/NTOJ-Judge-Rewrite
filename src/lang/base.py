@@ -32,6 +32,10 @@ class BaseLang(ABC):
     ) -> tuple[str, list[str]]:
         return NotImplemented
 
+    @abstractmethod
+    def need_compile(self) -> bool:
+        return NotImplemented
+
 
 class CompiledLang(BaseLang):
     def get_execute_command(self, executable_name: str, main=None, args: list[str] = None):
@@ -39,6 +43,9 @@ class CompiledLang(BaseLang):
             args = []
 
         return os.path.join(".", executable_name), args
+
+    def need_compile(self) -> bool:
+        return True
 
 
 langs: dict[Compiler, BaseLang] = {}
@@ -49,4 +56,4 @@ def reg_lang(compiler: Compiler, lang: BaseLang):
 
 
 def init_langs():
-    from lang import c, cpp, python3, rust, java, asm
+    from lang import c, cpp, python3, rust, java, asm, text

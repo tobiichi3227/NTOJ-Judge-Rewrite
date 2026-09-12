@@ -43,6 +43,9 @@ class _RISCV64Asm(BaseLang):
             args = []
         return "/usr/bin/qemu-riscv64", ["-L", "/usr/riscv64-linux-gnu/", executable_name] + args
 
+    def need_compile(self) -> bool:
+        return True
+
 @dataclass
 class _AARCH64Asm(BaseLang):
     def compile(
@@ -81,6 +84,9 @@ class _AARCH64Asm(BaseLang):
         if args is None:
             args = []
         return "/usr/bin/qemu-aarch64", ["-L", "/usr/aarch64-linux-gnu/", executable_name] + args
+
+    def need_compile(self) -> bool:
+        return True
 
 @dataclass
 class _Asm(CompiledLang):

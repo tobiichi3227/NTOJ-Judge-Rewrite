@@ -50,6 +50,8 @@ class _Java(BaseLang):
         command = ["-cp", executable_name, main] + args
         return "/usr/bin/java", command
 
+    def need_compile(self) -> bool:
+        return True
 
 reg_lang(
     Compiler.java,
