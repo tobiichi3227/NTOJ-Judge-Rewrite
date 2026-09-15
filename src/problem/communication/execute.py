@@ -359,6 +359,11 @@ class CommunicationExecuteTask(Task):
         testdata_result.time = sum(result.time for result in user_results)
         testdata_result.memory = sum(result.memory for result in user_results)
 
+        if testdata_result.time > chal.limits.time:
+            testdata_result.status = Status.TimeLimitExceeded
+            logger.info(f"Communication testdata {self.testdata.id} for chal {chal.chal_id} exceeded time limit")
+            return
+
         stdout_content = self._read_box_file(chal, manager_stdout_name)
         stderr_content = self._read_box_file(chal, manager_stderr_name)
 
