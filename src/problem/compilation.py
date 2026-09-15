@@ -55,7 +55,8 @@ class UserProgramCompilationTarget(CompilationTarget):
         if self.context.has_grader:
             grader_folder_path = os.path.join(chal.res_path, "grader", lang.name)
             for name in os.listdir(grader_folder_path):
-                if os.path.isdir(os.path.join(grader_folder_path, name)):
+                path = os.path.join(grader_folder_path, name)
+                if os.path.isdir(path):
                     continue
 
                 copy_in.append((os.path.join(grader_folder_path, name), name))
@@ -156,7 +157,8 @@ class CheckerCompilationTarget(CompilationTarget):
         copy_in = [(os.path.join(checker_path, checker_name), checker_name)]
 
         for name in os.listdir(checker_path):
-            if os.path.isdir(name):
+            path = os.path.join(checker_path, name)
+            if os.path.isdir(os.path.join(path, name)):
                 continue
 
             copy_in.append((os.path.join(checker_path, name), name))
